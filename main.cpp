@@ -11,6 +11,7 @@
 #include "z_ev.hpp"
 #include "z_queue.hpp"
 #include "z_list.hpp"
+#include "z_timer.hpp"
 
 struct tcp_echo final : z_Task {
     z_fields(z_ev_read read; z_ev_write write);
