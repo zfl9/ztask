@@ -41,14 +41,14 @@ public:
     z_Queue &operator=(z_Queue &&) = delete;
     z_Queue &operator=(const z_Queue &) = delete;
 
-    struct push {
+    struct z_push {
         z_leaf_fields();
 
-        z_def_deinit(push) {}
+        z_def_deinit(z_push) {}
 
         z_function(void, z_Queue *queue, T item) {
             z_begin();
-            while (!queue->raw_push(item)) {
+            while (!queue->push(item)) {
                 queue->_push_waiters.push_tail(z_current());
                 z_yield(z_current()->wait_node.unlink());
             }
@@ -56,14 +56,14 @@ public:
         }
     };
 
-    struct pop {
+    struct z_pop {
         z_leaf_fields();
 
-        z_def_deinit(pop) {}
+        z_def_deinit(z_pop) {}
 
         z_function(void, z_Queue *queue, T *item) {
             z_begin();
-            while (!queue->raw_pop(item)) {
+            while (!queue->pop(item)) {
                 queue->_pop_waiters.push_tail(z_current());
                 z_yield(z_current()->wait_node.unlink());
             }
@@ -72,7 +72,7 @@ public:
     };
 
     // on data available
-    void on_push() noexcept {
+    void on_data() noexcept {
         while (z_Task *waiter = _pop_waiters.first()) {
             if (is_empty()) break;
             waiter->resume();
@@ -80,7 +80,7 @@ public:
     }
 
     // on space available
-    void on_pop() noexcept {
+    void on_space() noexcept {
         while (z_Task *waiter = _push_waiters.first()) {
             if (is_full()) break;
             waiter->resume();
@@ -88,7 +88,7 @@ public:
     }
 
     // @return ok
-    bool raw_push(T item) noexcept {
+    bool push(T item) noexcept {
         if (!_array) {
             _array = new (std::nothrow) T[_capacity];
             if (!_array) [[unlikely]] return false;
@@ -97,18 +97,18 @@ public:
         _array[_tail] = item;
         _tail = (_tail + 1) & (_capacity - 1); 
         _count++;
-        on_push();
+        on_data();
         return true;
     }
 
     // @return ok
-    bool raw_pop(T *item) noexcept {
+    bool pop(T *item) noexcept {
         assert(item != nullptr);
         if (_count == 0) return false;
         *item = _array[_head];
         _head = (_head + 1) & (_capacity - 1);
         _count--;
-        on_pop();
+        on_space();
         return true;
     }
 

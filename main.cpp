@@ -108,7 +108,7 @@ struct tcp_server final : z_Task {
 };
 
 struct producer final : z_Task {
-    z_fields(z_Queue<int>::push push; z_ev_sleep sleep);
+    z_fields(z_Queue<int>::z_push push; z_ev_sleep sleep);
     ev_timer timer;
     z_Queue<int> *queue;
     int i = 0;
@@ -141,7 +141,7 @@ struct producer final : z_Task {
 };
 
 struct consumer final : z_Task {
-    z_fields(z_Queue<int>::pop pop; z_ev_sleep sleep);
+    z_fields(z_Queue<int>::z_pop pop; z_ev_sleep sleep);
     ev_timer timer;
     z_Queue<int> *queue;
     int i = 0;
@@ -188,7 +188,7 @@ int main() {
     {
         z_Queue<int> queue{8};
         for (int i = 0; i < 10; ++i) {
-            bool ok = queue.raw_push(i);
+            bool ok = queue.push(i);
             if (i < 8) assert(ok);
             else assert(!ok);
         }
