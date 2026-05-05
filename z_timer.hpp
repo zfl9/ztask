@@ -16,6 +16,8 @@ struct z_Timer {
     uint64_t index  : 8;
 };
 
+// todo: 分离实现到.cpp文件
+
 struct z_TimerMgr {
     using TimerList = z_List<z_Timer, &z_Timer::node>;
 

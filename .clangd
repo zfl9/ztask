@@ -1,0 +1,44 @@
+If:
+  PathMatch: [.*\.c, .*\.h]
+CompileFlags:
+  Compiler: clang
+  Add:
+    - -x
+    - c
+    - -std=c23
+    - -Wall
+    - -Wextra
+    - -Wno-unused-parameter
+
+---
+
+If:
+  PathMatch: [.*\.cpp, .*\.hpp]
+CompileFlags:
+  Compiler: clang++
+  Add:
+    - -x
+    - c++
+    - -std=c++23
+    - -Wall
+    - -Wextra
+    - -Wno-unused-parameter
+
+---
+
+Index:
+  Background: Build
+
+Completion:
+  AllScopes: true
+
+Diagnostics:
+  UnusedIncludes: None
+
+Hover:
+  ShowAKA: true
+
+InlayHints:
+  Enabled: true
+  ParameterNames: true
+  Designators: true
