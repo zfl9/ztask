@@ -5,10 +5,10 @@
 #include "z.hpp"
 #include "z_list.hpp"
 
-template <typename T>
+template<typename T>
 concept SmallTrivial = std::is_trivially_copyable_v<T> && (sizeof(T) <= 32);
 
-template <SmallTrivial T>
+template<SmallTrivial T>
 struct z_Queue {
 private:
     z_List<z_Task, &z_Task::wait_node> _push_waiters{};

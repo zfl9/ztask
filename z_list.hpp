@@ -138,7 +138,7 @@ struct z_Node {
 };
 
 // type-safe binding for z_Node
-template <typename T, z_Node T::*node_field>
+template<typename T, z_Node T::*node_field>
 struct z_node_binding {
     z_node_binding() = delete;
     ~z_node_binding() = delete;
@@ -181,7 +181,7 @@ struct z_node_binding {
     }
 };
 
-template <typename T, z_Node T::*node_field>
+template<typename T, z_Node T::*node_field>
 struct z_List {
     z_Node root{};
 
@@ -261,7 +261,7 @@ struct z_List {
 
     struct IterEnd {};
 
-    template <bool is_forward>
+    template<bool is_forward>
     struct Iter {
         const z_Node *const root;
         z_Node *cur;
@@ -300,7 +300,7 @@ struct z_List {
         }
     };
 
-    template <bool is_forward>
+    template<bool is_forward>
     struct View {
         const z_Node *const root;
 

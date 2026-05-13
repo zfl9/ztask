@@ -126,7 +126,7 @@ public:
     void deinit() noexcept
 
 // internal helper method
-template <typename T>
+template<typename T>
 inline void z_subtask_deinit(T *task) noexcept {
     if constexpr (requires { task->_z_subtask_deinit; }) {
         if (task->_z_subtask_deinit) {
