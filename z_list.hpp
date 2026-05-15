@@ -92,8 +92,6 @@ struct z_Node {
 
     void move_head(z_Node *moved_node) noexcept {
         assert(moved_node != this);
-        assert(moved_node->linked());
-
         if (moved_node != first()) {
             moved_node->unlink(false); // reinit=false
             push_head(moved_node);
@@ -102,8 +100,6 @@ struct z_Node {
 
     void move_tail(z_Node *moved_node) noexcept {
         assert(moved_node != this);
-        assert(moved_node->linked());
-
         if (moved_node != last()) {
             moved_node->unlink(false); // reinit=false
             push_tail(moved_node);
