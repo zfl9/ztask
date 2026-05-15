@@ -1,5 +1,7 @@
-**/*.o
-a.out
-main
+*.o
+*.gch
+*.pch
+/a.out
+/main
 .zig-cache/
 zig-out/

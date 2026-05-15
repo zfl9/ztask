@@ -90,7 +90,7 @@ struct z_Node {
         return del_node;
     }
 
-    void move_to_head(z_Node *moved_node) noexcept {
+    void move_head(z_Node *moved_node) noexcept {
         assert(moved_node != this);
         assert(moved_node->linked());
 
@@ -100,7 +100,7 @@ struct z_Node {
         }
     }
 
-    void move_to_tail(z_Node *moved_node) noexcept {
+    void move_tail(z_Node *moved_node) noexcept {
         assert(moved_node != this);
         assert(moved_node->linked());
 
@@ -110,7 +110,7 @@ struct z_Node {
         }
     }
 
-    void steal_to_head(z_Node *moved_root) noexcept {
+    void steal_head(z_Node *moved_root) noexcept {
         assert(moved_root != this);
         if (moved_root->is_empty()) return;
 
@@ -123,7 +123,7 @@ struct z_Node {
         moved_root->init();
     }
 
-    void steal_to_tail(z_Node *moved_root) noexcept {
+    void steal_tail(z_Node *moved_root) noexcept {
         assert(moved_root != this);
         if (moved_root->is_empty()) return;
 
@@ -241,22 +241,22 @@ struct z_List {
         return del_node ? binding::item_of(del_node) : nullptr;
     }
 
-    void move_to_head(T *item) noexcept {
-        return root.move_to_head(binding::node_of(item));
+    void move_head(T *item) noexcept {
+        return root.move_head(binding::node_of(item));
     }
 
-    void move_to_tail(T *item) noexcept {
-        return root.move_to_tail(binding::node_of(item));
+    void move_tail(T *item) noexcept {
+        return root.move_tail(binding::node_of(item));
     }
 
     /// move all elements from `moved_list` to head. O(1)
-    void steal_to_head(z_List *moved_list) noexcept {
-        return root.steal_to_head(&moved_list->root);
+    void steal_head(z_List *moved_list) noexcept {
+        return root.steal_head(&moved_list->root);
     }
 
     /// move all elements from `moved_list` to tail. O(1)
-    void steal_to_tail(z_List *moved_list) noexcept {
-        return root.steal_to_tail(&moved_list->root);
+    void steal_tail(z_List *moved_list) noexcept {
+        return root.steal_tail(&moved_list->root);
     }
 
     struct IterEnd {};

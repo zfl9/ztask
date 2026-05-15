@@ -12,6 +12,10 @@ namespace {
         bitset[index >> 6] &= ~(1ULL << (index & 0x3F));
     }
 
+    constexpr bool test_bit(const uint64_t *bitset, unsigned index) noexcept {
+        return bitset[index >> 6] & (1ULL << (index & 0x3F));
+    }
+
     // pos of the next set bit (non-circular), or total_bits if not found
     template<unsigned num_words>
     constexpr unsigned next_bit(const uint64_t *words, unsigned pos) noexcept {
@@ -157,7 +161,7 @@ int z_TimerMgr::epoll_timeout() const noexcept {
     if (res > (uint64_t)(INT_MAX))
         return INT_MAX;
 
-    return res;
+    return (int)res;
 }
 
 void z_TimerMgr::update(uint64_t now) noexcept {
@@ -186,29 +190,43 @@ void z_TimerMgr::update(uint64_t now) noexcept {
 }
 
 void z_TimerMgr::discharge(unsigned level) noexcept {
-    uint64_t index;
     z_TimerList *list;
 
     switch (level) {
-        case 0: index = current & 0xFF;         list = &level_0[index]; break;
-        case 1: index = (current >> 8) & 0xFF;  list = &level_1[index]; break;
-        case 2: index = (current >> 16) & 0x3F; list = &level_2[index]; break;
-        case 3: index = (current >> 22) & 0x3F; list = &level_3[index]; break;
-        default: std::unreachable();
+        case 0: {
+            unsigned index = current & 0xFF;
+            if (!test_bit(bitset_0, index)) return;
+            clear_bit(bitset_0, index);
+            list = &level_0[index];
+            break;
+        }
+        case 1: {
+            unsigned index = (current >> 8) & 0xFF;
+            if (!test_bit(bitset_1, index)) return;
+            clear_bit(bitset_1, index);
+            list = &level_1[index];
+            break;
+        }
+        case 2: {
+            unsigned index = (current >> 16) & 0x3F;
+            if (!test_bit(&bitset_2, index)) return;
+            clear_bit(&bitset_2, index);
+            list = &level_2[index];
+            break;
+        }
+        case 3: {
+            unsigned index = (current >> 22) & 0x3F;
+            if (!test_bit(&bitset_3, index)) return;
+            clear_bit(&bitset_3, index);
+            list = &level_3[index];
+            break;
+        }
+        default:
+            std::unreachable();
     }
-
-    if (list->is_empty()) return;
 
     z_TimerList tmp_list;
-    tmp_list.steal_to_tail(list);
-
-    switch (level) {
-        case 0: clear_bit(bitset_0, index); break;
-        case 1: clear_bit(bitset_1, index); break;
-        case 2: clear_bit(&bitset_2, index); break;
-        case 3: clear_bit(&bitset_3, index); break;
-        default: std::unreachable();
-    }
+    tmp_list.steal_tail(list);
 
     if (level == 0) {
         while (z_Timer *timer = tmp_list.pop_head()) timer->callback(timer);

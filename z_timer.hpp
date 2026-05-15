@@ -29,7 +29,7 @@ private:
     uint64_t current{}; // clock_monotonic in ms
 
 public:
-    explicit z_TimerMgr(uint64_t now = 0) noexcept : current{now} {}
+    explicit z_TimerMgr(uint64_t now) noexcept : current{now} {}
 
     ~z_TimerMgr() noexcept = default;
 
