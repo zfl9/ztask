@@ -4,11 +4,13 @@
 #include <utility>
 #include <new>
 #include "z_list.hpp"
+#include "z_timer.hpp"
 
 // task interface (stackless coroutine)
 struct z_Task {
 public:
     z_Node wait_node{};
+    z_Timer timer{};
 private:
     // execution flow (ref), creator (ref)
     uint32_t ref_count = 2;
@@ -62,7 +64,7 @@ protected:
 
 struct z_TaskRef {
 private:
-    z_Task *task;
+    z_Task *task = nullptr;
 
 public:
     explicit z_TaskRef(z_Task *task) noexcept : task{task} {}
@@ -91,7 +93,7 @@ public:
         subtask_decls; \
         z_SubTaskU() noexcept {} \
         ~z_SubTaskU() noexcept {} \
-    } _z_subtask_u; \
+    } _z_subtask_u{}; \
     int32_t _z_resume_point = 0
 
 // leaf task fields (`z_call` is not available)
@@ -104,7 +106,7 @@ public:
 #define z_impl_deinit(T) \
     virtual bool do_resume() noexcept override { \
         /* recall z_function(result, z_task) */ \
-        return this->operator()(nullptr, this); \
+        return this->operator()(z_no_result(), this); \
     } \
     virtual ~T() noexcept override { \
         this->terminate(); \
@@ -137,7 +139,8 @@ inline void z_subtask_deinit(T *task) noexcept {
 }
 
 // task's coroutine function
-#define z_function(Result, param_decls...) bool operator()(Result *_z_result, z_Task *_z_task, ##param_decls) noexcept
+#define z_function(Result, param_decls...) \
+    bool operator()(Result *_z_result, z_Task *_z_task, ##param_decls) noexcept
 
 // current z_function's `result *`
 #define z_result() (_z_result)
@@ -145,11 +148,14 @@ inline void z_subtask_deinit(T *task) noexcept {
 // current running `z_Task *`
 #define z_current() (_z_task)
 
+// z_call ignore the result
+#define z_no_result() (nullptr)
+
 #define Z_CONCAT_(a, b) a##b
 #define Z_CONCAT(a, b) Z_CONCAT_(a, b)
 #define Z_LABEL Z_CONCAT(z_label_, __LINE__)
-#define z_label_addr ((int32_t)((intptr_t)&&Z_LABEL - (intptr_t)&&z_label_base))
-#define z_resume_point ((void *)((intptr_t)&&z_label_base + (intptr_t)this->_z_resume_point))
+#define z_label_addr() ((int32_t)((intptr_t)&&Z_LABEL - (intptr_t)&&z_label_base))
+#define z_resume_point() ((void *)((intptr_t)&&z_label_base + (intptr_t)this->_z_resume_point))
 
 #define z_check_cancel() do { \
     if (z_current()->is_canceled()) [[unlikely]] \
@@ -158,12 +164,12 @@ inline void z_subtask_deinit(T *task) noexcept {
 
 // place this at the beginning of the body of `z_function`
 #define z_begin() \
-    goto *z_resume_point; \
+    goto *z_resume_point(); \
     z_label_base: \
     z_check_cancel() \
 
 #define z_yield(resume_logic...) do { \
-    this->_z_resume_point = z_label_addr; \
+    this->_z_resume_point = z_label_addr(); \
     return false; \
     Z_LABEL: \
     resume_logic; \
@@ -181,17 +187,15 @@ inline void z_subtask_deinit(T *task) noexcept {
     z_ret(final_logic); \
 } while (0)
 
-#define z_no_result() nullptr
-
 // @param result: `Result *`, use `z_no_result()` to ignore
 // @param args: the arguments passed to z_function (pinned)
 #define z_call(taskname, result, args...) do { \
     using z_SubTask = std::remove_reference_t<decltype(this->_z_subtask_u.taskname)>; \
     new (&this->_z_subtask_u.taskname) z_SubTask{}; \
-    this->_z_subtask_deinit = [] (z_SubTaskU *u) noexcept { u->taskname.~z_SubTask(); }; \
+    this->_z_subtask_deinit = [] (z_SubTaskU *u) static noexcept { u->taskname.~z_SubTask(); }; \
 Z_LABEL: \
     if (!this->_z_subtask_u.taskname((result), z_current(), ##args)) { \
-        this->_z_resume_point = z_label_addr; \
+        this->_z_resume_point = z_label_addr(); \
         return false; \
     } \
     this->_z_subtask_u.taskname.~z_SubTask(); \

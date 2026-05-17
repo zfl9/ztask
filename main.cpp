@@ -210,6 +210,14 @@ int main() {
         list.push_tail(&b);
         list.push_tail(&c);
 
+        list.foreach([] (Item *item) static noexcept {
+            printf("[foreach] item.id: %d\n", item->id);
+        });
+
+        list.rev_foreach([] (Item *item) static noexcept {
+            printf("[rev_foreach] item.id: %d\n", item->id);
+        });
+
         printf("items()\n");
         for (auto item : list.items()) {
             printf("item.id: %d\n", item->id);

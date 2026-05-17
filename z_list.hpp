@@ -1,12 +1,13 @@
 #pragma once
 #include <cassert>
 #include <cstddef>
+#include <concepts>
 
 struct z_Node {
-    z_Node *prev;
-    z_Node *next;
+    z_Node *prev = this;
+    z_Node *next = this;
 
-    z_Node() noexcept : prev{this}, next{this} {}
+    z_Node() noexcept = default;
     ~z_Node() noexcept { unlink(false); };
 
     z_Node(z_Node &&) = delete;
@@ -259,7 +260,7 @@ struct z_List {
 
     template<bool is_forward>
     struct Iter {
-        const z_Node *const root;
+        const z_Node *root;
         z_Node *cur;
         z_Node *next;
 
@@ -298,7 +299,7 @@ struct z_List {
 
     template<bool is_forward>
     struct View {
-        const z_Node *const root;
+        const z_Node *root;
 
         Iter<is_forward> begin() const noexcept {
             return {root};
@@ -309,11 +310,53 @@ struct z_List {
         }
     };
 
+    // It is safe to destroy cur item.
     View<true> items() const noexcept {
         return {&root};
     }
 
+    // It is safe to destroy cur item.
     View<false> rev_items() const noexcept {
         return {&root};
+    }
+
+    // It is safe to destroy any item.
+    // func(T *item) -> bool/void (true to break)
+    void foreach(auto func) noexcept {
+        if (is_empty()) return;
+        z_Node cursor{};
+        cursor.link_after(&root);
+        while (cursor.next != &root && cursor.next != &cursor) {
+            z_Node *cur_node = cursor.next;
+            cursor.unlink(false);
+            cursor.link_after(cur_node);
+            T *item = binding::item_of(cur_node);
+            if constexpr (requires { {func(item)} -> std::same_as<bool>; }) {
+                if (func(item)) break;
+            } else {
+                static_assert(requires { {func(item)} -> std::same_as<void>; }, "func must return bool or void");
+                func(item);
+            }
+        }
+    }
+
+    // It is safe to destroy any item.
+    // func(T *item) -> bool/void (true to break)
+    void rev_foreach(auto func) noexcept {
+        if (is_empty()) return;
+        z_Node cursor{};
+        cursor.link_before(&root);
+        while (cursor.prev != &root && cursor.prev != &cursor) {
+            z_Node *cur_node = cursor.prev;
+            cursor.unlink(false);
+            cursor.link_before(cur_node);
+            T *item = binding::item_of(cur_node);
+            if constexpr (requires { {func(item)} -> std::same_as<bool>; }) {
+                if (func(item)) break;
+            } else {
+                static_assert(requires { {func(item)} -> std::same_as<void>; }, "func must return bool or void");
+                func(item);
+            }
+        }
     }
 };

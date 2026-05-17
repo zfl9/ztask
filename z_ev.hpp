@@ -9,19 +9,19 @@
 struct z_ev {
     static inline ev_loop *evloop = nullptr;
 
-    static void init() {
+    static void init() noexcept {
         evloop = ev_default_loop(0);
     }
 
-    static void run() {
+    static void run() noexcept {
         ev_run(evloop);
     }
 
-    using io_callback_t = void (*)(ev_loop *, ev_io *, int revents);
-    using timer_callback_t = void (*)(ev_loop *, ev_timer *, int revents);
+    using io_callback_t = void (*)(ev_loop *, ev_io *, int revents) noexcept;
+    using timer_callback_t = void (*)(ev_loop *, ev_timer *, int revents) noexcept;
 
-    static void io_start(ev_io *io, z_Task *task, int events) {
-        io_callback_t callback = [] (ev_loop *, ev_io *io, int) {
+    static void io_start(ev_io *io, z_Task *task, int events) noexcept {
+        io_callback_t callback = [] (ev_loop *, ev_io *io, int) static noexcept {
             auto *task = static_cast<z_Task *>(io->data);
             task->resume();
         };
@@ -35,12 +35,12 @@ struct z_ev {
         ev_io_start(evloop, io);
     }
 
-    static void io_stop(ev_io *io) {
+    static void io_stop(ev_io *io) noexcept {
         ev_io_stop(evloop, io);
     }
 
-    static void timer_start(ev_timer *timer, z_Task *task, double after_sec, double repeat_sec = 0.0) {
-        timer_callback_t callback = [] (ev_loop *, ev_timer *timer, int) {
+    static void timer_start(ev_timer *timer, z_Task *task, double after_sec, double repeat_sec = 0.0) noexcept {
+        timer_callback_t callback = [] (ev_loop *, ev_timer *timer, int) static noexcept {
             auto *task = static_cast<z_Task *>(timer->data);
             task->resume();
         };
@@ -54,7 +54,7 @@ struct z_ev {
         ev_timer_start(evloop, timer);
     }
 
-    static void timer_stop(ev_timer *timer) {
+    static void timer_stop(ev_timer *timer) noexcept {
         ev_timer_stop(evloop, timer);
     }
 };

@@ -2,14 +2,21 @@
 #include <bit>
 #include <new>
 #include <type_traits>
+#include <concepts>
 #include "z.hpp"
 #include "z_list.hpp"
 
 template<typename T>
-concept SmallTrivial = std::is_trivially_copyable_v<T> && (sizeof(T) <= 32);
+concept z_pure_c_type =
+    std::is_trivially_default_constructible_v<T> &&
+    std::is_trivially_copy_constructible_v<T> &&
+    std::is_trivially_copy_assignable_v<T> &&
+    std::is_trivially_destructible_v<T>;
 
-template<SmallTrivial T>
+template<typename T>
+requires(z_pure_c_type<T> && sizeof(T) <= 32)
 struct z_Queue {
+    using DestroyFn = void (*)(T item) noexcept;
 private:
     z_List<z_Task, &z_Task::wait_node> _push_waiters{};
     z_List<z_Task, &z_Task::wait_node> _pop_waiters{};
@@ -17,12 +24,11 @@ private:
     size_t _head = 0;
     size_t _tail = 0;
     size_t _count = 0;
-    const size_t _capacity;
-    using DestroyFn = void (*)(T item) noexcept;
-    DestroyFn _destroy_fn;
+    size_t _capacity = 0;
+    DestroyFn _destroy_fn = nullptr;
 
 public:
-    z_Queue(size_t capacity = 64, DestroyFn destroy_fn = nullptr) noexcept :
+    z_Queue(size_t capacity, DestroyFn destroy_fn = nullptr) noexcept :
         _capacity{std::bit_ceil(capacity)},
         _destroy_fn{destroy_fn}
         {}
