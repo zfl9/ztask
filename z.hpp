@@ -140,7 +140,7 @@ inline void z_subtask_deinit(T *task) noexcept {
 
 // task's coroutine function
 #define z_function(Result, param_decls...) \
-    bool operator()(Result *_z_result, z_Task *_z_task, ##param_decls) noexcept
+    bool operator()([[maybe_unused]] Result *_z_result, z_Task *_z_task, ##param_decls) noexcept
 
 // current z_function's `result *`
 #define z_result() (_z_result)

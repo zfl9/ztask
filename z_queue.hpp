@@ -11,6 +11,8 @@ concept z_pure_c_type =
     std::is_trivially_default_constructible_v<T> &&
     std::is_trivially_copy_constructible_v<T> &&
     std::is_trivially_copy_assignable_v<T> &&
+    std::is_trivially_move_constructible_v<T> &&
+    std::is_trivially_move_assignable_v<T> &&
     std::is_trivially_destructible_v<T>;
 
 template<typename T>
@@ -18,25 +20,25 @@ requires(z_pure_c_type<T> && sizeof(T) <= 32)
 struct z_Queue {
     using DestroyFn = void (*)(T item) noexcept;
 private:
-    z_List<z_Task, &z_Task::wait_node> _push_waiters{};
-    z_List<z_Task, &z_Task::wait_node> _pop_waiters{};
-    T *_array = nullptr;
     size_t _head = 0;
     size_t _tail = 0;
     size_t _count = 0;
     size_t _capacity = 0;
+    T *_array = nullptr;
     DestroyFn _destroy_fn = nullptr;
+    z_List<z_Task, &z_Task::wait_node> _push_tasks{};
+    z_List<z_Task, &z_Task::wait_node> _pop_tasks{};
 
 public:
     z_Queue(size_t capacity, DestroyFn destroy_fn = nullptr) noexcept :
         _capacity{std::bit_ceil(capacity)},
+        _array{new (std::nothrow) T[_capacity]},
         _destroy_fn{destroy_fn}
         {}
 
     ~z_Queue() noexcept {
-        assert(_push_waiters.is_empty());
-        assert(_pop_waiters.is_empty());
-        clear(true);
+        clear();
+        delete[] _array;
     }
 
     // copy,move ctor
@@ -55,7 +57,7 @@ public:
         z_function(void, z_Queue *queue, T item) {
             z_begin();
             while (!queue->push(item)) {
-                queue->_push_waiters.push_tail(z_current());
+                queue->_push_tasks.push_tail(z_current());
                 z_yield(z_current()->wait_node.unlink());
             }
             z_ret();
@@ -70,7 +72,7 @@ public:
         z_function(void, z_Queue *queue, T *item) {
             z_begin();
             while (!queue->pop(item)) {
-                queue->_pop_waiters.push_tail(z_current());
+                queue->_pop_tasks.push_tail(z_current());
                 z_yield(z_current()->wait_node.unlink());
             }
             z_ret();
@@ -79,26 +81,22 @@ public:
 
     // on data available
     void on_data() noexcept {
-        while (z_Task *waiter = _pop_waiters.first()) {
+        while (z_Task *task = _pop_tasks.first()) {
             if (is_empty()) break;
-            waiter->resume();
+            task->resume();
         }
     }
 
     // on space available
     void on_space() noexcept {
-        while (z_Task *waiter = _push_waiters.first()) {
+        while (z_Task *task = _push_tasks.first()) {
             if (is_full()) break;
-            waiter->resume();
+            task->resume();
         }
     }
 
     // @return ok
     bool push(T item) noexcept {
-        if (!_array) {
-            _array = new (std::nothrow) T[_capacity];
-            if (!_array) [[unlikely]] return false;
-        }
         if (_count >= _capacity) return false;
         _array[_tail] = item;
         _tail = (_tail + 1) & (_capacity - 1); 
@@ -139,19 +137,16 @@ public:
         return _count >= _capacity;
     }
 
-    void clear(bool free_mem = false) noexcept {
+    void clear() noexcept {
+        assert(_push_tasks.is_empty());
+        assert(_pop_tasks.is_empty());
         if (_destroy_fn) {
             for (size_t i = 0; i < _count; ++i) {
                 size_t pos = (_head + i) & (_capacity - 1);
                 _destroy_fn(_array[pos]);
             }
         }
-        _head = _tail;
-        _count = 0;
-        if (free_mem && _array) {
-            delete[] _array;
-            _array = nullptr;
-        }
+        _head = _tail = _count = 0;
     }
 
     void set_destroy_fn(DestroyFn destroy_fn) noexcept {
