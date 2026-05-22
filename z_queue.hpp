@@ -26,8 +26,8 @@ private:
     size_t _capacity = 0;
     T *_array = nullptr;
     DestroyFn _destroy_fn = nullptr;
-    z_List<z_Task, &z_Task::wait_node> _push_tasks{};
-    z_List<z_Task, &z_Task::wait_node> _pop_tasks{};
+    z_List<z_Task, &z_Task::wait_node> _readers{};
+    z_List<z_Task, &z_Task::wait_node> _writers{};
 
 public:
     z_Queue(size_t capacity, DestroyFn destroy_fn = nullptr) noexcept :
@@ -52,12 +52,12 @@ public:
     struct z_push {
         z_leaf_fields();
 
-        z_def_deinit(z_push) {}
+        z_deinit(z_push) {}
 
         z_function(void, z_Queue *queue, T item) {
             z_begin();
             while (!queue->push(item)) {
-                queue->_push_tasks.push_tail(z_current());
+                queue->_writers.push_tail(z_current());
                 z_yield(z_current()->wait_node.unlink());
             }
             z_ret();
@@ -67,12 +67,12 @@ public:
     struct z_pop {
         z_leaf_fields();
 
-        z_def_deinit(z_pop) {}
+        z_deinit(z_pop) {}
 
         z_function(void, z_Queue *queue, T *item) {
             z_begin();
             while (!queue->pop(item)) {
-                queue->_pop_tasks.push_tail(z_current());
+                queue->_readers.push_tail(z_current());
                 z_yield(z_current()->wait_node.unlink());
             }
             z_ret();
@@ -81,7 +81,7 @@ public:
 
     // on data available
     void on_data() noexcept {
-        while (z_Task *task = _pop_tasks.first()) {
+        while (z_Task *task = _readers.first()) {
             if (is_empty()) break;
             task->resume();
         }
@@ -89,7 +89,7 @@ public:
 
     // on space available
     void on_space() noexcept {
-        while (z_Task *task = _push_tasks.first()) {
+        while (z_Task *task = _writers.first()) {
             if (is_full()) break;
             task->resume();
         }
@@ -138,8 +138,8 @@ public:
     }
 
     void clear() noexcept {
-        assert(_push_tasks.is_empty());
-        assert(_pop_tasks.is_empty());
+        assert(_readers.is_empty());
+        assert(_writers.is_empty());
         if (_destroy_fn) {
             for (size_t i = 0; i < _count; ++i) {
                 size_t pos = (_head + i) & (_capacity - 1);

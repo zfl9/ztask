@@ -1,10 +1,19 @@
 #pragma once
-#include "z_timer.hpp"
-#include "z_epoll.hpp"
+#include <cstdint>
+
+// forward declarations to avoid circular dependencies
+struct z_TimerMgr;
+struct z_Epoll;
+struct z_Timer;
+struct z_Fd;
 
 struct g {
     static z_TimerMgr timer_mgr;
     static z_Epoll epoll;
 
-    // todo
+    static void add_timer(z_Timer *timer) noexcept;
+    static void del_timer(z_Timer *timer) noexcept;
+
+    static void on_fd_dirty(z_Fd *fd) noexcept;
+    static void on_fd_close(z_Fd *fd) noexcept;
 };

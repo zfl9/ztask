@@ -19,7 +19,7 @@ struct tcp_echo final : z_Task {
     char buf[128];
     ssize_t len;
 
-    z_impl_deinit(tcp_echo) {
+    z_root_deinit(tcp_echo) {
         printf("~tcp_echo(): fd:%d\n", io.fd);
         z_ev::io_stop(&io);
         close(io.fd);
@@ -57,7 +57,7 @@ struct tcp_server final : z_Task {
     ev_io io;
     int port;
 
-    z_impl_deinit(tcp_server) {
+    z_root_deinit(tcp_server) {
         printf("~tcp_server(): fd:%d\n", io.fd);
         z_ev::io_stop(&io);
         close(io.fd);
@@ -116,7 +116,7 @@ struct producer final : z_Task {
     int count;
     int interval;
 
-    z_impl_deinit(producer) {
+    z_root_deinit(producer) {
         printf("~producer()\n");
         z_ev::timer_stop(&timer);
     }
@@ -149,7 +149,7 @@ struct consumer final : z_Task {
     int count;
     int interval;
 
-    z_impl_deinit(consumer) {
+    z_root_deinit(consumer) {
         printf("~consumer()\n");
         z_ev::timer_stop(&timer);
     }

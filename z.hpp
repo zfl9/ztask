@@ -6,6 +6,26 @@
 #include "z_list.hpp"
 #include "z_timer.hpp"
 
+// task->resume(reason, param);
+// accessible only when z_yield() resume.
+enum class z_Reason : uint8_t {
+    READY, // resource ready (fd readable/writable)
+    ERROR, // resource error (fd error)
+    TIMER, // timer triggered (sleep or timeout)
+    CANCEL, // triggered only by task->cancel()
+};
+
+// task->resume(reason, param);
+// accessible only when z_yield() resume.
+union z_Param {
+    void *ptr; // a pointer to any local variable at the call site of `task->resume()`
+    int64_t i64;
+    uint64_t u64;
+    int32_t i32;
+    uint32_t u32;
+    int err;
+};
+
 // task interface (stackless coroutine)
 struct z_Task {
 public:
@@ -14,11 +34,12 @@ public:
 private:
     // execution flow (ref), creator (ref)
     uint32_t ref_count = 2;
-    // cancellation signal received
-    bool canceled = false;
-protected:
     // the task has been terminated
     bool terminated = false;
+    // cancellation signal received
+    bool canceled = false;
+    z_Reason _reason = z_Reason::READY;
+    z_Param _param{};
 
 public:
     z_Task *ref() noexcept {
@@ -32,24 +53,32 @@ public:
     }
 
     // @return true(DONE), false(YIELD)
-    bool resume() noexcept {
-        if (terminated) [[unlikely]] return true;
+    void resume(z_Reason reason = z_Reason::READY, z_Param param = {}) noexcept {
+        if (terminated) [[unlikely]] return;
+        _reason = reason;
+        _param = param;
         if (do_resume()) {
             terminate();
             unref();
-            return true;
         }
-        return false;
     }
 
-    // cancellation is synchronous and RAII-safe
+    // cancellation is RAII-safe, but may be completed asynchronously
     void cancel() noexcept {
         if (terminated || canceled) [[unlikely]] return;
         canceled = true;
-        resume();
+        resume(z_Reason::CANCEL);
     }
 
+    // the task has been terminated
+    bool is_terminated() const noexcept { return terminated; }
+    // cancellation signal received
     bool is_canceled() const noexcept { return canceled; }
+
+    // accessible only when z_yield() resume
+    z_Reason reason() const noexcept { return _reason; }
+    // accessible only when z_yield() resume
+    z_Param param() const noexcept { return _param; }
 
 protected:
     // task must have a destructor
@@ -60,6 +89,13 @@ protected:
 
     // dispose task, leaving only harmless zombies
     virtual void terminate() noexcept = 0;
+
+    // return false if already terminated, true otherwise
+    bool set_terminated() noexcept {
+        if (terminated) [[unlikely]] return false;
+        terminated = true;
+        return true;
+    }
 };
 
 struct z_TaskRef {
@@ -100,10 +136,10 @@ public:
 #define z_leaf_fields() \
     int32_t _z_resume_point = 0
 
-// for `struct RootTask : z_Task { ... }`
+// for `struct RootTask final : z_Task { ... }`
 // implement the `z_Task::do_resume` method
 // implement the `z_Task::~T() + terminate()` method
-#define z_impl_deinit(T) \
+#define z_root_deinit(T) \
     virtual bool do_resume() noexcept override { \
         /* recall z_function(result, z_task) */ \
         return this->operator()(z_no_result(), this); \
@@ -112,20 +148,22 @@ public:
         this->terminate(); \
     } \
     virtual void terminate() noexcept override { \
-        if (this->terminated) return; \
-        this->terminated = true; \
+        if (!this->set_terminated()) return; \
         z_subtask_deinit(this); \
         this->deinit(); \
     } \
     void deinit() noexcept
 
 // for `struct LogicTask { ... }`
-#define z_def_deinit(T) \
+#define z_deinit(T) \
     ~T() noexcept { \
         z_subtask_deinit(this); \
         this->deinit(); \
     } \
     void deinit() noexcept
+
+#define z_deinit_def(T) \
+    void T::deinit() noexcept
 
 // internal helper method
 template<typename T>
@@ -138,9 +176,13 @@ inline void z_subtask_deinit(T *task) noexcept {
     }
 }
 
-// task's coroutine function
+// task's coroutine function (decl)
 #define z_function(Result, param_decls...) \
     bool operator()([[maybe_unused]] Result *_z_result, z_Task *_z_task, ##param_decls) noexcept
+
+// task's coroutine function (define)
+#define z_function_def(T, Result, param_decls...) \
+    bool T::operator()([[maybe_unused]] Result *_z_result, z_Task *_z_task, ##param_decls) noexcept
 
 // current z_function's `result *`
 #define z_result() (_z_result)

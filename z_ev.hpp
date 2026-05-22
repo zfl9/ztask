@@ -63,7 +63,7 @@ struct z_ev_read {
     z_leaf_fields();
     size_t n_read = 0;
 
-    z_def_deinit(z_ev_read) {}
+    z_deinit(z_ev_read) {}
 
     z_function(ssize_t, ev_io *io, void *buf, size_t len, size_t at_least = 0) {
         z_begin();
@@ -92,7 +92,7 @@ struct z_ev_write {
     z_leaf_fields();
     size_t n_write = 0;
 
-    z_def_deinit(z_ev_write) {}
+    z_deinit(z_ev_write) {}
 
     z_function(ssize_t, ev_io *io, const void *buf, size_t len) {
         z_begin();
@@ -116,7 +116,7 @@ struct z_ev_write {
 struct z_ev_accept {
     z_leaf_fields();
 
-    z_def_deinit(z_ev_accept) {}
+    z_deinit(z_ev_accept) {}
 
     z_function(int, ev_io *io, struct sockaddr *addr = nullptr, socklen_t *addrlen = nullptr, int flags = SOCK_CLOEXEC|SOCK_NONBLOCK) {
         z_begin();
@@ -136,7 +136,7 @@ struct z_ev_accept {
 struct z_ev_connect {
     z_leaf_fields();
 
-    z_def_deinit(z_ev_connect) {}
+    z_deinit(z_ev_connect) {}
 
     z_function(int, ev_io *io, const struct sockaddr *addr, socklen_t addrlen) {
         z_begin();
@@ -163,7 +163,7 @@ struct z_ev_connect {
 struct z_ev_sleep {
     z_leaf_fields();
 
-    z_def_deinit(z_ev_sleep) {}
+    z_deinit(z_ev_sleep) {}
 
     z_function(void, ev_timer *timer, double sleep_sec) {
         z_begin();
