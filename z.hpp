@@ -199,23 +199,16 @@ inline void z_subtask_deinit(T *task) noexcept {
 #define z_label_addr() ((int32_t)((intptr_t)&&Z_LABEL - (intptr_t)&&z_label_base))
 #define z_resume_point() ((void *)((intptr_t)&&z_label_base + (intptr_t)this->_z_resume_point))
 
-#define z_check_cancel() do { \
-    if (z_current()->is_canceled()) [[unlikely]] \
-        z_ret(); \
-} while (0)
-
 // place this at the beginning of the body of `z_function`
 #define z_begin() \
     goto *z_resume_point(); \
     z_label_base: \
-    z_check_cancel() \
 
 #define z_yield(resume_logic...) do { \
     this->_z_resume_point = z_label_addr(); \
     return false; \
     Z_LABEL: \
     resume_logic; \
-    z_check_cancel(); \
 } while (0)
 
 #define z_ret(final_logic...) do { \
@@ -242,7 +235,7 @@ Z_LABEL: \
     } \
     this->_z_subtask_u.taskname.~z_SubTask(); \
     this->_z_subtask_deinit = nullptr; \
-    z_check_cancel(); \
+    if (z_current()->is_canceled()) [[unlikely]] z_ret(); \
 } while (0)
 
 // the caller owns a reference (z_TaskRef)
