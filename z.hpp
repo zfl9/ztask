@@ -3,13 +3,14 @@
 #include <type_traits>
 #include <utility>
 #include <new>
+#include "z_util.hpp"
 #include "z_waiter.hpp"
 #include "z_timer.hpp"
 
 // task interface (stackless coroutine)
 struct z_Task {
 public:
-    z_Waiter waiter{};
+    z_Waiter waiter{.callback = &z_Task::waiter_cb};
     z_Timer timer{};
 private:
     // execution flow (ref), creator (ref)
@@ -60,6 +61,11 @@ public:
     z_Event event() const noexcept { return _event; }
     // accessible only when z_yield() resume
     z_Param param() const noexcept { return _param; }
+
+    static void waiter_cb(z_Waiter *waiter, z_Event event, z_Param param) noexcept {
+        z_Task *task = z_container_of<&z_Task::waiter>(waiter);
+        return task->resume(event, param);
+    }
 
 protected:
     // task must have a destructor

@@ -2,6 +2,7 @@
 #include <cassert>
 #include <cstddef>
 #include <concepts>
+#include "z_util.hpp"
 
 struct z_Node {
     z_Node *prev = this;
@@ -141,12 +142,11 @@ struct z_node_binding {
     ~z_node_binding() = delete;
 
     static T *item_of(z_Node *node) noexcept {
-        return const_cast<T *>(item_of(const_cast<const z_Node *>(node)));
+        return z_container_of<node_field>(node);
     }
 
     static const T *item_of(const z_Node *node) noexcept {
-        size_t offset = reinterpret_cast<size_t>(&(static_cast<T *>(nullptr)->*node_field));
-        return reinterpret_cast<const T *>(reinterpret_cast<const char *>(node) - offset);
+        return z_container_of<node_field>(node);
     }
 
     static z_Node *node_of(T *item) noexcept {

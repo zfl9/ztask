@@ -26,6 +26,7 @@ union z_Param {
 
 struct z_Waiter {
     using Callback = void (*)(z_Waiter *waiter, z_Event, z_Param) noexcept;
+
     z_Node node{};
     Callback callback = nullptr;
 

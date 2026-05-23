@@ -4,6 +4,7 @@
 
 struct z_Timer {
     using Callback = void (*)(z_Timer *timer) noexcept;
+
     z_Node node{};
     Callback callback = nullptr;
     uint64_t expire:54 = 0; // clock_monotonic in ms
