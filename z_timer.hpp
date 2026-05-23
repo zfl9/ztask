@@ -10,6 +10,11 @@ struct z_Timer {
     uint64_t expire:54 = 0; // clock_monotonic in ms
     uint64_t level:2 = 0;
     uint64_t index:8 = 0;
+
+    explicit z_Timer(Callback callback, uint64_t expire) noexcept
+        : callback{callback}, expire{expire} {}
+
+    ~z_Timer() noexcept = default;
 };
 
 using z_TimerList = z_List<z_Timer, &z_Timer::node>;

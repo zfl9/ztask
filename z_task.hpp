@@ -10,8 +10,8 @@
 // task interface (stackless coroutine)
 struct z_Task {
 public:
-    z_Waiter waiter{.callback = &z_Task::waiter_cb};
-    z_Timer timer{};
+    z_Waiter waiter{&z_Task::waiter_cb};
+    z_Timer timer{&z_Task::timer_cb, 0};
 private:
     // execution flow (ref), creator (ref)
     uint32_t ref_count = 2;
@@ -33,9 +33,8 @@ public:
             delete this;
     }
 
-    // todo: remove default param
     // @return true(DONE), false(YIELD)
-    void resume(z_Event event = z_Event::READY, z_Param param = {}) noexcept {
+    void resume(z_Event event, z_Param param) noexcept {
         if (terminated) [[unlikely]] return;
         _event = event;
         _param = param;
@@ -49,7 +48,7 @@ public:
     void cancel() noexcept {
         if (terminated || canceled) [[unlikely]] return;
         canceled = true;
-        resume(z_Event::CANCEL);
+        resume(z_Event::CANCEL, {});
     }
 
     // the task has been terminated
@@ -62,9 +61,16 @@ public:
     // accessible only when z_yield() resume
     z_Param param() const noexcept { return _param; }
 
+    // the `waiter` must be z_Task::waiter
     static void waiter_cb(z_Waiter *waiter, z_Event event, z_Param param) noexcept {
         z_Task *task = z_container_of<&z_Task::waiter>(waiter);
         return task->resume(event, param);
+    }
+
+    // the `timer` must be z_Task::timer
+    static void timer_cb(z_Timer *timer) noexcept {
+        z_Task *task = z_container_of<&z_Task::timer>(timer);
+        return task->resume(z_Event::TIMER, {.ptr = timer});
     }
 
 protected:
@@ -238,7 +244,7 @@ Z_LABEL: \
 #define z_spawn(T, ctor_args...) ({ \
     z_Task *__z_spawn_task = new (std::nothrow) T{ctor_args}; \
     if (__z_spawn_task) [[likely]] \
-        __z_spawn_task->resume(); \
+        __z_spawn_task->resume(z_Event::READY, {}); \
     z_TaskRef{__z_spawn_task}; \
 })
 

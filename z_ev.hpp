@@ -23,7 +23,7 @@ struct z_ev {
     static void io_start(ev_io *io, z_Task *task, int events) noexcept {
         io_callback_t callback = [] (ev_loop *, ev_io *io, int) static noexcept {
             auto *task = static_cast<z_Task *>(io->data);
-            task->resume();
+            task->resume(z_Event::READY, {});
         };
 
         ev_io_stop(evloop, io);
@@ -42,7 +42,7 @@ struct z_ev {
     static void timer_start(ev_timer *timer, z_Task *task, double after_sec, double repeat_sec = 0.0) noexcept {
         timer_callback_t callback = [] (ev_loop *, ev_timer *timer, int) static noexcept {
             auto *task = static_cast<z_Task *>(timer->data);
-            task->resume();
+            task->resume(z_Event::READY, {});
         };
 
         ev_timer_stop(evloop, timer);

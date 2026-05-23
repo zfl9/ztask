@@ -11,11 +11,13 @@ void z_Fd::close_fd() noexcept {
 }
 
 void z_Fd::add_read_w(z_Waiter *w) noexcept {
+    assert(!has_data);
     read_wq.push_tail(w);
     g::on_fd_dirty(this);
 }
 
 void z_Fd::add_write_w(z_Waiter *w) noexcept {
+    assert(!has_space);
     write_wq.push_tail(w);
     g::on_fd_dirty(this);
 }
