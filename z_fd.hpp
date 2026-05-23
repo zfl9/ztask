@@ -16,6 +16,7 @@ struct z_Fd {
 
     explicit z_Fd(int fd) noexcept : raw_fd{fd} {}
 
+    // todo: private ~T()
     ~z_Fd() noexcept {
         close_fd();
     }

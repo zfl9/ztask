@@ -1,6 +1,5 @@
 #pragma once
 #include <cassert>
-#include <cstddef>
 #include <concepts>
 #include "z_util.hpp"
 

@@ -3,7 +3,7 @@
 #include "z_timer.hpp"
 
 z_Epoll g::epoll{};
-z_TimerMgr g::timer_mgr{0};
+z_TimerMgr g::timer_mgr{0}; // todo: param now
 
 void g::add_timer(z_Timer *timer) noexcept {
     timer_mgr.add_timer(timer);

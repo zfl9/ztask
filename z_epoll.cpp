@@ -1,11 +1,11 @@
 #include "z_epoll.hpp"
 #include <errno.h>
+#include <signal.h>
 #include <unistd.h>
 #include <sys/epoll.h>
-#include <signal.h>
-#include "z_timer.hpp"
 #include "g.hpp"
 #include "log.h"
+#include "z_timer.hpp"
 
 z_Epoll::z_Epoll() noexcept {
     ::signal(SIGPIPE, SIG_IGN);

@@ -4,7 +4,7 @@
 
 enum class z_Event : uint8_t {
     READY, // resource ready (fd readable/writable)
-    ERROR, // resource error (fd error)
+    ERROR, // resource error (fd fatal error)
     TIMER, // timer triggered (sleep or timeout)
     CANCEL, // triggered only by task->cancel()
 };

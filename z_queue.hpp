@@ -1,19 +1,9 @@
 #pragma once
 #include <bit>
 #include <new>
-#include <type_traits>
-#include <concepts>
 #include "z_task.hpp"
-#include "z_list.hpp"
-
-template<typename T>
-concept z_pure_c_type =
-    std::is_trivially_default_constructible_v<T> &&
-    std::is_trivially_copy_constructible_v<T> &&
-    std::is_trivially_copy_assignable_v<T> &&
-    std::is_trivially_move_constructible_v<T> &&
-    std::is_trivially_move_assignable_v<T> &&
-    std::is_trivially_destructible_v<T>;
+#include "z_waiter.hpp"
+#include "z_util.hpp"
 
 template<typename T>
 requires(z_pure_c_type<T> && sizeof(T) <= 32)
@@ -30,7 +20,7 @@ private:
     z_WaiterList _write_wq{};
 
 public:
-    z_Queue(size_t capacity, DestroyFn destroy_fn = nullptr) noexcept :
+    explicit z_Queue(size_t capacity, DestroyFn destroy_fn = nullptr) noexcept :
         _capacity{std::bit_ceil(capacity)},
         _array{new (std::nothrow) T[_capacity]},
         _destroy_fn{destroy_fn}

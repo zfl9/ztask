@@ -7,9 +7,8 @@
 #include "z_waiter.hpp"
 #include "z_timer.hpp"
 
-// task interface (stackless coroutine)
+// task interface (structured coroutine)
 struct z_Task {
-public:
     z_Waiter waiter{&z_Task::waiter_cb};
     z_Timer timer{&z_Task::timer_cb, 0};
 private:
@@ -23,6 +22,14 @@ private:
     z_Param _param{};
 
 public:
+    z_Task() noexcept = default;
+
+    z_Task(const z_Task &) = delete;
+    z_Task(z_Task &&) = delete;
+
+    z_Task &operator=(const z_Task &) = delete;
+    z_Task &operator=(z_Task &&) = delete;
+
     z_Task *ref() noexcept {
         ++ref_count;
         return this;
@@ -33,7 +40,6 @@ public:
             delete this;
     }
 
-    // @return true(DONE), false(YIELD)
     void resume(z_Event event, z_Param param) noexcept {
         if (terminated) [[unlikely]] return;
         _event = event;
@@ -198,16 +204,16 @@ void z_subtask_deinit(T *task) noexcept {
     goto *z_resume_point(); \
     z_label_base: \
 
+// access the waiter and timer of the current task
+#define z_waiter() (&z_current()->waiter)
+#define z_timer() (&z_current()->timer)
+
 #define z_yield(resume_logic...) do { \
     this->_z_resume_point = z_label_addr(); \
     return false; \
     Z_LABEL: \
     resume_logic; \
 } while (0)
-
-// access the waiter and timer of the current task
-#define z_waiter() (&z_current()->waiter)
-#define z_timer() (&z_current()->timer)
 
 // access the arguments passed by `task->resume(event, param)`
 #define z_event() (z_current()->event())
