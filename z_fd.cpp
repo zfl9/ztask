@@ -10,37 +10,37 @@ void z_Fd::close_fd() noexcept {
     }
 }
 
-void z_Fd::add_reader(z_Task *task) noexcept {
-    readers.push_tail(task);
+void z_Fd::add_read_w(z_Waiter *w) noexcept {
+    read_wq.push_tail(w);
     g::on_fd_dirty(this);
 }
 
-void z_Fd::add_writer(z_Task *task) noexcept {
-    writers.push_tail(task);
+void z_Fd::add_write_w(z_Waiter *w) noexcept {
+    write_wq.push_tail(w);
     g::on_fd_dirty(this);
 }
 
-void z_Fd::del_reader(z_Task *task) noexcept {
-    task->wait_node.unlink();
+void z_Fd::del_read_w(z_Waiter *w) noexcept {
+    w->unlink();
     g::on_fd_dirty(this);
 }
 
-void z_Fd::del_writer(z_Task *task) noexcept {
-    task->wait_node.unlink();
+void z_Fd::del_write_w(z_Waiter *w) noexcept {
+    w->unlink();
     g::on_fd_dirty(this);
 }
 
 void z_Fd::on_readable() noexcept {
-    while (z_Task *task = readers.first()) {
+    while (z_Waiter *w = read_wq.first()) {
         if (!has_data) break;
-        task->resume();
+        w->callback(w, z_Event::READY, {.ptr = this});
     }
 }
 
 void z_Fd::on_writable() noexcept {
-    while (z_Task *task = writers.first()) {
+    while (z_Waiter *w = write_wq.first()) {
         if (!has_space) break;
-        task->resume();
+        w->callback(w, z_Event::READY, {.ptr = this});
     }
 }
 
@@ -54,6 +54,7 @@ void z_Fd::on_error() noexcept {
 z_function_def(z_Fd::z_read, ssize_t, z_Fd *fd, void *buf, size_t len, size_t at_least) {
     z_begin();
     // todo
+    (void)z_current();
     (void)fd;
     (void)buf;
     (void)len;
@@ -64,6 +65,7 @@ z_function_def(z_Fd::z_read, ssize_t, z_Fd *fd, void *buf, size_t len, size_t at
 z_function_def(z_Fd::z_write, ssize_t, z_Fd *fd, const void *buf, size_t len) {
     z_begin();
     // todo
+    (void)z_current();
     (void)fd;
     (void)buf;
     (void)len;
@@ -73,6 +75,7 @@ z_function_def(z_Fd::z_write, ssize_t, z_Fd *fd, const void *buf, size_t len) {
 z_function_def(z_Fd::z_accept, int, z_Fd *fd, struct sockaddr *addr, socklen_t *addrlen, int flags) {
     z_begin();
     // todo
+    (void)z_current();
     (void)fd;
     (void)addr;
     (void)addrlen;
@@ -83,6 +86,7 @@ z_function_def(z_Fd::z_accept, int, z_Fd *fd, struct sockaddr *addr, socklen_t *
 z_function_def(z_Fd::z_connect, int, z_Fd *fd, const struct sockaddr *addr, socklen_t addrlen) {
     z_begin();
     // todo
+    (void)z_current();
     (void)fd;
     (void)addr;
     (void)addrlen;

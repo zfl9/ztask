@@ -72,8 +72,8 @@ void z_Epoll::on_fd_close(z_Fd *fd) noexcept {
 void z_Epoll::flush_dirty_fds() noexcept {
     while (z_Fd *fd = dirty_fds.pop_head()) {
         uint32_t want_events = 0;
-        if (!fd->readers.is_empty()) want_events |= EPOLLIN;
-        if (!fd->writers.is_empty()) want_events |= EPOLLOUT;
+        if (!fd->read_wq.is_empty()) want_events |= EPOLLIN;
+        if (!fd->write_wq.is_empty()) want_events |= EPOLLOUT;
 
         if (want_events != fd->ep_events) {
             if (want_events == 0) {

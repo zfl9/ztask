@@ -26,8 +26,8 @@ private:
     size_t _capacity = 0;
     T *_array = nullptr;
     DestroyFn _destroy_fn = nullptr;
-    z_List<z_Task, &z_Task::wait_node> _readers{};
-    z_List<z_Task, &z_Task::wait_node> _writers{};
+    z_WaiterList _read_wq{};
+    z_WaiterList _write_wq{};
 
 public:
     z_Queue(size_t capacity, DestroyFn destroy_fn = nullptr) noexcept :
@@ -57,8 +57,8 @@ public:
         z_function(void, z_Queue *queue, T item) {
             z_begin();
             while (!queue->push(item)) {
-                queue->_writers.push_tail(z_current());
-                z_yield(z_current()->wait_node.unlink());
+                queue->_write_wq.push_tail(z_waiter());
+                z_yield(z_waiter()->unlink());
             }
             z_ret();
         }
@@ -72,8 +72,8 @@ public:
         z_function(void, z_Queue *queue, T *item) {
             z_begin();
             while (!queue->pop(item)) {
-                queue->_readers.push_tail(z_current());
-                z_yield(z_current()->wait_node.unlink());
+                queue->_read_wq.push_tail(z_waiter());
+                z_yield(z_waiter()->unlink());
             }
             z_ret();
         }
@@ -81,17 +81,17 @@ public:
 
     // on data available
     void on_data() noexcept {
-        while (z_Task *task = _readers.first()) {
+        while (z_Waiter *w = _read_wq.first()) {
             if (is_empty()) break;
-            task->resume();
+            w->callback(w, z_Event::READY, {.ptr = this});
         }
     }
 
     // on space available
     void on_space() noexcept {
-        while (z_Task *task = _writers.first()) {
+        while (z_Waiter *w = _write_wq.first()) {
             if (is_full()) break;
-            task->resume();
+            w->callback(w, z_Event::READY, {.ptr = this});
         }
     }
 
@@ -138,8 +138,8 @@ public:
     }
 
     void clear() noexcept {
-        assert(_readers.is_empty());
-        assert(_writers.is_empty());
+        assert(_read_wq.is_empty());
+        assert(_write_wq.is_empty());
         if (_destroy_fn) {
             for (size_t i = 0; i < _count; ++i) {
                 size_t pos = (_head + i) & (_capacity - 1);

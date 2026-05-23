@@ -3,33 +3,13 @@
 #include <type_traits>
 #include <utility>
 #include <new>
-#include "z_list.hpp"
+#include "z_waiter.hpp"
 #include "z_timer.hpp"
-
-// task->resume(reason, param);
-// accessible only when z_yield() resume.
-enum class z_Reason : uint8_t {
-    READY, // resource ready (fd readable/writable)
-    ERROR, // resource error (fd error)
-    TIMER, // timer triggered (sleep or timeout)
-    CANCEL, // triggered only by task->cancel()
-};
-
-// task->resume(reason, param);
-// accessible only when z_yield() resume.
-union z_Param {
-    void *ptr; // a pointer to any local variable at the call site of `task->resume()`
-    int64_t i64;
-    uint64_t u64;
-    int32_t i32;
-    uint32_t u32;
-    int err;
-};
 
 // task interface (stackless coroutine)
 struct z_Task {
 public:
-    z_Node wait_node{};
+    z_Waiter waiter{};
     z_Timer timer{};
 private:
     // execution flow (ref), creator (ref)
@@ -38,7 +18,7 @@ private:
     bool terminated = false;
     // cancellation signal received
     bool canceled = false;
-    z_Reason _reason = z_Reason::READY;
+    z_Event _event = z_Event::READY;
     z_Param _param{};
 
 public:
@@ -52,10 +32,11 @@ public:
             delete this;
     }
 
+    // todo: remove default param
     // @return true(DONE), false(YIELD)
-    void resume(z_Reason reason = z_Reason::READY, z_Param param = {}) noexcept {
+    void resume(z_Event event = z_Event::READY, z_Param param = {}) noexcept {
         if (terminated) [[unlikely]] return;
-        _reason = reason;
+        _event = event;
         _param = param;
         if (do_resume()) {
             terminate();
@@ -67,7 +48,7 @@ public:
     void cancel() noexcept {
         if (terminated || canceled) [[unlikely]] return;
         canceled = true;
-        resume(z_Reason::CANCEL);
+        resume(z_Event::CANCEL);
     }
 
     // the task has been terminated
@@ -76,7 +57,7 @@ public:
     bool is_canceled() const noexcept { return canceled; }
 
     // accessible only when z_yield() resume
-    z_Reason reason() const noexcept { return _reason; }
+    z_Event event() const noexcept { return _event; }
     // accessible only when z_yield() resume
     z_Param param() const noexcept { return _param; }
 
@@ -154,7 +135,7 @@ public:
     } \
     void deinit() noexcept
 
-// for `struct LogicTask { ... }`
+// for `struct NestedTask { ... }`
 #define z_deinit(T) \
     ~T() noexcept { \
         z_subtask_deinit(this); \
@@ -162,6 +143,7 @@ public:
     } \
     void deinit() noexcept
 
+// define T::deinit() outside of the struct
 #define z_deinit_def(T) \
     void T::deinit() noexcept
 
@@ -176,7 +158,7 @@ inline void z_subtask_deinit(T *task) noexcept {
     }
 }
 
-// task's coroutine function (decl)
+// task's coroutine function
 #define z_function(Result, param_decls...) \
     bool operator()([[maybe_unused]] Result *_z_result, z_Task *_z_task, ##param_decls) noexcept
 
@@ -210,6 +192,14 @@ inline void z_subtask_deinit(T *task) noexcept {
     Z_LABEL: \
     resume_logic; \
 } while (0)
+
+// access the waiter and timer of the current task
+#define z_waiter() (&z_current()->waiter)
+#define z_timer() (&z_current()->timer)
+
+// access the arguments passed by `task->resume(event, param)`
+#define z_event() (z_current()->event())
+#define z_param() (z_current()->param())
 
 #define z_ret(final_logic...) do { \
     this->_z_resume_point = INT32_MIN; /* fail-fast */ \

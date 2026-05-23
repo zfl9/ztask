@@ -2,11 +2,11 @@
 #include <cstdint>
 #include <sys/socket.h>
 #include "z.hpp"
-#include "z_list.hpp"
+#include "z_waiter.hpp"
 
 struct z_Fd {
-    z_List<z_Task, &z_Task::wait_node> readers{};
-    z_List<z_Task, &z_Task::wait_node> writers{};
+    z_WaiterList read_wq{};
+    z_WaiterList write_wq{};
     z_Node ep_node{}; // link to z_Epoll::dirty_fds
     uint32_t ep_events = 0; // events registered in epoll(kernel)
     uint32_t ref_count = 1;
@@ -32,11 +32,11 @@ struct z_Fd {
             delete this;
     }
 
-    void add_reader(z_Task *task) noexcept;
-    void add_writer(z_Task *task) noexcept;
+    void add_read_w(z_Waiter *w) noexcept;
+    void add_write_w(z_Waiter *w) noexcept;
 
-    void del_reader(z_Task *task) noexcept;
-    void del_writer(z_Task *task) noexcept;
+    void del_read_w(z_Waiter *w) noexcept;
+    void del_write_w(z_Waiter *w) noexcept;
 
     void on_readable() noexcept;
     void on_writable() noexcept;

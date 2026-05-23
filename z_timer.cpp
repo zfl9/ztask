@@ -1,4 +1,5 @@
 #include "z_timer.hpp"
+#include <climits>
 #include <cassert>
 #include <utility>
 #include <bit>
