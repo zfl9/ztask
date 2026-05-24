@@ -73,7 +73,7 @@ public:
     void on_data() noexcept {
         while (z_Waiter *w = _read_wq.first()) {
             if (is_empty()) break;
-            w->callback(w, z_Event::READY, {.ptr = this});
+            w->callback(w, z_Waker::RESOURCE, this);
         }
     }
 
@@ -81,7 +81,7 @@ public:
     void on_space() noexcept {
         while (z_Waiter *w = _write_wq.first()) {
             if (is_full()) break;
-            w->callback(w, z_Event::READY, {.ptr = this});
+            w->callback(w, z_Waker::RESOURCE, this);
         }
     }
 

@@ -69,3 +69,10 @@ struct z_Fd {
         z_function(int, z_Fd *fd, const struct sockaddr *addr, socklen_t addrlen);
     };
 };
+
+struct z_FdPayload {
+    z_Fd *fd = nullptr;
+    int err = 0;
+    bool readable = false;
+    bool writable = false;
+};

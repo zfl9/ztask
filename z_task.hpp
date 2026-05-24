@@ -18,8 +18,9 @@ private:
     bool terminated = false;
     // cancellation signal received
     bool canceled = false;
-    z_Event _event = z_Event::READY;
-    z_Param _param{};
+    // task->resume(waker, payload)
+    z_Waker _waker = z_Waker::_START;
+    void *_payload = nullptr;
 
 public:
     z_Task() noexcept = default;
@@ -40,10 +41,10 @@ public:
             delete this;
     }
 
-    void resume(z_Event event, z_Param param) noexcept {
+    void resume(z_Waker waker, void *payload) noexcept {
         if (terminated) [[unlikely]] return;
-        _event = event;
-        _param = param;
+        _waker = waker;
+        _payload = payload;
         if (do_resume()) {
             terminate();
             unref();
@@ -54,7 +55,7 @@ public:
     void cancel() noexcept {
         if (terminated || canceled) [[unlikely]] return;
         canceled = true;
-        resume(z_Event::CANCEL, {});
+        resume(z_Waker::CANCEL, nullptr);
     }
 
     // the task has been terminated
@@ -63,20 +64,20 @@ public:
     bool is_canceled() const noexcept { return canceled; }
 
     // accessible only when z_yield() resume
-    z_Event event() const noexcept { return _event; }
+    z_Waker waker() const noexcept { return _waker; }
     // accessible only when z_yield() resume
-    z_Param param() const noexcept { return _param; }
+    void *payload() const noexcept { return _payload; }
 
     // the `waiter` must be z_Task::waiter
-    static void waiter_cb(z_Waiter *waiter, z_Event event, z_Param param) noexcept {
-        z_Task *task = z_container_of<&z_Task::waiter>(waiter);
-        return task->resume(event, param);
+    static void waiter_cb(z_Waiter *w, z_Waker waker, void *payload) noexcept {
+        z_Task *task = z_container_of<&z_Task::waiter>(w);
+        return task->resume(waker, payload);
     }
 
     // the `timer` must be z_Task::timer
     static void timer_cb(z_Timer *timer) noexcept {
         z_Task *task = z_container_of<&z_Task::timer>(timer);
-        return task->resume(z_Event::TIMER, {.ptr = timer});
+        return task->resume(z_Waker::TIMER, timer);
     }
 
 protected:
@@ -215,9 +216,9 @@ void z_subtask_deinit(T *task) noexcept {
     resume_logic; \
 } while (0)
 
-// access the arguments passed by `task->resume(event, param)`
-#define z_event() (z_current()->event())
-#define z_param() (z_current()->param())
+// passed by `task->resume(waker, payload)`
+#define z_waker() (z_current()->waker())
+#define z_payload(T) (static_cast<T>(z_current()->payload()))
 
 #define z_ret(final_logic...) do { \
     this->_z_resume_point = INT32_MIN; /* fail-fast */ \
@@ -250,7 +251,7 @@ Z_LABEL: \
 #define z_spawn(T, ctor_args...) ({ \
     z_Task *__z_spawn_task = new (std::nothrow) T{ctor_args}; \
     if (__z_spawn_task) [[likely]] \
-        __z_spawn_task->resume(z_Event::READY, {}); \
+        __z_spawn_task->resume(z_Waker::_START, nullptr); \
     z_TaskRef{__z_spawn_task}; \
 })
 

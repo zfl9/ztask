@@ -7,6 +7,9 @@ void z_Fd::close_fd() noexcept {
         g::on_fd_close(this);
         ::close(raw_fd);
         raw_fd = -1;
+
+        // wake up all waiters
+
     }
 }
 
@@ -33,17 +36,23 @@ void z_Fd::del_write_w(z_Waiter *w) noexcept {
 }
 
 void z_Fd::on_readable() noexcept {
+    ref();
+    z_FdPayload payload{.fd = this, .readable = true};
     while (z_Waiter *w = read_wq.first()) {
         if (!has_data) break;
-        w->callback(w, z_Event::READY, {.ptr = this});
+        w->callback(w, z_Waker::RESOURCE, &payload);
     }
+    unref();
 }
 
 void z_Fd::on_writable() noexcept {
+    ref();
+    z_FdPayload payload{.fd = this, .writable = true};
     while (z_Waiter *w = write_wq.first()) {
         if (!has_space) break;
-        w->callback(w, z_Event::READY, {.ptr = this});
+        w->callback(w, z_Waker::RESOURCE, &payload);
     }
+    unref();
 }
 
 void z_Fd::on_error() noexcept {

@@ -2,24 +2,15 @@
 #include <cstdint>
 #include "z_list.hpp"
 
-enum class z_Event : uint8_t {
-    READY, // resource ready (fd readable/writable)
-    ERROR, // resource error (fd fatal error)
-    TIMER, // timer triggered (sleep or timeout)
-    CANCEL, // triggered only by task->cancel()
-};
-
-union z_Param {
-    void *ptr; // a pointer to any local variable at the call site of `callback()`
-    int64_t i64;
-    uint64_t u64;
-    int32_t i32;
-    uint32_t u32;
-    int err;
+enum class z_Waker : uint8_t {
+    RESOURCE, // trigger by resource (ready/error)
+    TIMER, // trigger by timer (sleep or timeout)
+    CANCEL, // trigger by task->cancel()
+    _START, // start the task (internal)
 };
 
 struct z_Waiter {
-    using Callback = void (*)(z_Waiter *waiter, z_Event event, z_Param param) noexcept;
+    using Callback = void (*)(z_Waiter *w, z_Waker waker, void *payload) noexcept;
 
     z_Node node{};
     Callback callback = nullptr;
