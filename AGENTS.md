@@ -8,29 +8,39 @@
 
 ## 核心约束
 
-### 对象生命周期
+### 构造与资源管理
 
 - **构造 + 析构 + move 构造（按需定义）**，其余一律 `= delete`
 - **禁止 `operator=` 重载**：自赋值检测与旧资源清理的语义复杂性使其得不偿失
 - **RAII 贯穿始终**：侵入式 u32 引用计数，避免 `std::shared_ptr` 的强制原子操作开销
-- **侵入式数据结构**：`z_List<T, &T::field>` 配合 `z_container_of`，零额外动态分配开销
 
-### 内存布局
+### 数据结构与内存
 
-- 非必要：不继承、不 `virtual`、不 `template`
-- struct 字段通常按类型的 `alignment` 降序排列
-- 宏注入 `fields`、`methods` 是 C/C++ 的务实之选
+- **侵入式数据结构**：`z_Node` 配合 `z_container_of`，零动态分配开销
+- struct 字段按类型的 `alignment` 降序排列，善用位域优化布局
+- 宏注入 `fields`、`methods` 是目前 C/C++ 的务实之选
 
-### 函数与闭包
+### 接口与泛型
 
-- 所有公开接口 **必须 `noexcept`**
+- 禁用 C++ 异常（代码膨胀、污染指令缓存）
+- 所有公开接口、回调签名 **必须 `noexcept`**
 - 无捕获的 lambda **必须 `static noexcept`**
-- `template` 的非类型参数等价于 Zig 的 `comptime` 函数参数
+- 对继承、virtual、模板保持克制——不炫技，不教条
+- 模板约束用 **C++20 concepts**，避免老套&晦涩的 SFINAE
+- `template` 非类型参数等价于 Zig 的 `comptime` 函数参数
 
 ### 命名与风格
 
 - 头文件全部 `#pragma once`
 - `z_` 简洁前缀（源于项目名 `ztask`）
 - C 风格 `snake_case`，`T *p`、`T &r`、`T &&r`
-- 日志使用 `log.h` 的 `log_info` / `log_warning` / `log_error`
-- 模板约束用 **C++20 concepts**（如 `z_pure_c_type`），不用 SFINAE
+- 小对象：值传参（零成本的寄存器传递），同时减少指针对优化器的干扰
+- 复杂对象：指针传参（纯粹 C/Zig 风格），无需考虑复杂的 C++ 对象语义
+- 不滥用引用：完美转发、转发引用等杂音在 C 风格指针传递面前鲜有用场
+
+### 性能与代码组织
+
+- 减少指针别名与指针逃逸，给编译器留足优化空间
+- 避免 header-only 风格，头文件只放声明，保持纯粹
+- 警惕代码膨胀，保持代码精简，多写优化器友好的代码
+- release 构建由 LTO(full) 保证跨编译单元的性能优化
