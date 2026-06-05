@@ -1,10 +1,14 @@
 #pragma once
 #include <cstdint>
 #include <sys/socket.h>
+#include "z_ref.hpp"
 #include "z_task.hpp"
 #include "z_waiter.hpp"
 
 struct z_Fd {
+    friend struct z_Epoll;
+
+private:
     z_WaiterList read_wq{};
     z_WaiterList write_wq{};
     z_Node ep_node{}; // link to z_Epoll::dirty_fds
@@ -15,23 +19,14 @@ struct z_Fd {
     bool has_space = true; // set to false when a write operation encounters EAGAIN
 
     explicit z_Fd(int fd) noexcept : raw_fd{fd} {}
+    ~z_Fd() noexcept { close(); }
 
-    // todo: private ~T()
-    ~z_Fd() noexcept {
-        close_fd();
-    }
+public:
+    z_ref_impl(z_Fd);
+    z_ref_create(z_Fd);
 
-    void close_fd() noexcept;
-
-    z_Fd *ref() noexcept {
-        ++ref_count;
-        return this;
-    }
-
-    void unref() noexcept {
-        if (--ref_count == 0)
-            delete this;
-    }
+    void close() noexcept;
+    bool is_closed() const noexcept { return raw_fd < 0; }
 
     void add_read_w(z_Waiter *w) noexcept;
     void add_write_w(z_Waiter *w) noexcept;
@@ -39,9 +34,7 @@ struct z_Fd {
     void del_read_w(z_Waiter *w) noexcept;
     void del_write_w(z_Waiter *w) noexcept;
 
-    void on_readable() noexcept;
-    void on_writable() noexcept;
-    void on_error() noexcept;
+    void on_event(bool ev_data, bool ev_space) noexcept;
 
     struct z_read {
         z_leaf_fields();
@@ -68,11 +61,4 @@ struct z_Fd {
         z_deinit(z_connect) {}
         z_function(int, z_Fd *fd, const struct sockaddr *addr, socklen_t addrlen);
     };
-};
-
-struct z_FdPayload {
-    z_Fd *fd = nullptr;
-    int err = 0;
-    bool readable = false;
-    bool writable = false;
 };

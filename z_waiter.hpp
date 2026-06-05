@@ -20,6 +20,10 @@ struct z_Waiter {
 
     ~z_Waiter() noexcept = default;
 
+    bool linked() const noexcept {
+        return node.linked();
+    }
+
     void unlink(bool reinit = true) noexcept {
         return node.unlink(reinit);
     }

@@ -17,4 +17,7 @@ public:
 
 private:
     void flush_dirty_fds() noexcept;
+
+    void ep_add(z_Fd *fd, uint32_t events) noexcept;
+    void ep_del(z_Fd *fd) noexcept;
 };

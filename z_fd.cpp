@@ -2,25 +2,27 @@
 #include <unistd.h>
 #include "g.hpp"
 
-void z_Fd::close_fd() noexcept {
+void z_Fd::close() noexcept {
     if (raw_fd >= 0) {
         g::on_fd_close(this);
         ::close(raw_fd);
         raw_fd = -1;
 
         // wake up all waiters
-
+        on_event(false, false);
+        assert(read_wq.is_empty());
+        assert(write_wq.is_empty());
     }
 }
 
 void z_Fd::add_read_w(z_Waiter *w) noexcept {
-    assert(!has_data);
+    assert(!has_data && !is_closed());
     read_wq.push_tail(w);
     g::on_fd_dirty(this);
 }
 
 void z_Fd::add_write_w(z_Waiter *w) noexcept {
-    assert(!has_space);
+    assert(!has_space && !is_closed());
     write_wq.push_tail(w);
     g::on_fd_dirty(this);
 }
@@ -35,31 +37,20 @@ void z_Fd::del_write_w(z_Waiter *w) noexcept {
     g::on_fd_dirty(this);
 }
 
-void z_Fd::on_readable() noexcept {
-    ref();
-    z_FdPayload payload{.fd = this, .readable = true};
-    while (z_Waiter *w = read_wq.first()) {
-        if (!has_data) break;
-        w->callback(w, z_Waker::RESOURCE, &payload);
-    }
-    unref();
-}
+void z_Fd::on_event(bool ev_data, bool ev_space) noexcept {
+    if (ev_data) has_data = true;
+    if (ev_space) has_space = true;
 
-void z_Fd::on_writable() noexcept {
-    ref();
-    z_FdPayload payload{.fd = this, .writable = true};
-    while (z_Waiter *w = write_wq.first()) {
-        if (!has_space) break;
-        w->callback(w, z_Waker::RESOURCE, &payload);
+    while (has_data || is_closed()) {
+        auto *w = read_wq.pop_head();
+        if (!w) break;
+        w->callback(w, z_Waker::RESOURCE, this);
     }
-    unref();
-}
-
-void z_Fd::on_error() noexcept {
-    // todo: set error flag
-    on_readable();
-    on_writable();
-    close_fd();
+    while (has_space || is_closed()) {
+        auto *w = write_wq.pop_head();
+        if (!w) break;
+        w->callback(w, z_Waker::RESOURCE, this);
+    }
 }
 
 z_function_def(z_Fd::z_read, ssize_t, z_Fd *fd, void *buf, size_t len, size_t at_least) {

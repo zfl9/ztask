@@ -21,12 +21,14 @@ void z_Epoll::run() noexcept {
     struct epoll_event events[max_events];
 
     for (;;) {
+        g::update_now();
+        g::timer_mgr.update(g::now); // may trigger the user callback
+
         flush_dirty_fds();
         int timeout = g::timer_mgr.epoll_timeout();
         int n_events = epoll_wait(ep_fd, events, max_events, timeout);
 
-        // update time wheel
-        // g::timer_mgr->update();
+        g::update_now();
 
         if (n_events < 0) [[unlikely]] {
             if (errno == EINTR) continue;
@@ -34,24 +36,24 @@ void z_Epoll::run() noexcept {
             break;
         }
 
-        // add ref
         for (int i = 0; i < n_events; ++i) {
             z_Fd *fd = (z_Fd *)events[i].data.ptr;
-            fd->ref();
+            (void)fd->add_ref();
         }
+
+        // must be placed after `add_ref()`
+        g::timer_mgr.update(g::now);
 
         for (int i = 0; i < n_events; ++i) {
             z_Fd *fd = (z_Fd *)events[i].data.ptr;
             uint32_t ev = events[i].events;
 
-            if (ev & (EPOLLIN | EPOLLHUP | EPOLLERR))
-                fd->on_readable();
+            // feed event to fd
+            bool ev_data = ev & (EPOLLIN | EPOLLHUP | EPOLLERR);
+            bool ev_space = ev & (EPOLLOUT | EPOLLHUP | EPOLLERR);
+            fd->on_event(ev_data, ev_space);
 
-            if (ev & (EPOLLOUT | EPOLLHUP | EPOLLERR))
-                fd->on_writable();
-
-            // drop ref
-            fd->unref();
+            fd->drop_ref();
         }
     }
 }
@@ -63,10 +65,8 @@ void z_Epoll::on_fd_dirty(z_Fd *fd) noexcept {
 
 void z_Epoll::on_fd_close(z_Fd *fd) noexcept {
     fd->ep_node.unlink();
-    if (fd->ep_events != 0) {
-        epoll_ctl(ep_fd, EPOLL_CTL_DEL, fd->raw_fd, nullptr);
-        fd->unref(); // drop ref (own by epoll instance)
-    }
+    if (fd->ep_events != 0)
+        ep_del(fd);
 }
 
 void z_Epoll::flush_dirty_fds() noexcept {
@@ -76,19 +76,33 @@ void z_Epoll::flush_dirty_fds() noexcept {
         if (!fd->write_wq.is_empty()) want_events |= EPOLLOUT;
 
         if (want_events != fd->ep_events) {
-            if (want_events == 0) {
-                epoll_ctl(ep_fd, EPOLL_CTL_DEL, fd->raw_fd, nullptr);
-                fd->unref(); // drop ref (own by epoll instance)
-            } else {
-                struct epoll_event ev{
-                    .events = want_events | EPOLLET,
-                    .data = { .ptr = fd },
-                };
-                int op = (fd->ep_events == 0) ? EPOLL_CTL_ADD : EPOLL_CTL_MOD;
-                epoll_ctl(ep_fd, op, fd->raw_fd, &ev);
-                if (op == EPOLL_CTL_ADD) fd->ref(); // add ref (own by epoll instance)
-            }
-            fd->ep_events = want_events;
+            if (want_events != 0)
+                ep_add(fd, want_events);
+            else
+                ep_del(fd);
         }
     }
+}
+
+void z_Epoll::ep_add(z_Fd *fd, uint32_t events) noexcept {
+    struct epoll_event ev{
+        .events = events | EPOLLET,
+        .data = { .ptr = fd },
+    };
+    int op = (fd->ep_events == 0) ? EPOLL_CTL_ADD : EPOLL_CTL_MOD;
+
+    fd->ep_events = events;
+    if (op == EPOLL_CTL_ADD)
+        (void)fd->add_ref(); // held by epoll instance
+
+    int res = epoll_ctl(ep_fd, op, fd->raw_fd, &ev);
+    assert(res == 0); (void)res;
+}
+
+void z_Epoll::ep_del(z_Fd *fd) noexcept {
+    int res = epoll_ctl(ep_fd, EPOLL_CTL_DEL, fd->raw_fd, nullptr);
+    assert(res == 0); (void)res;
+
+    fd->ep_events = 0;
+    fd->drop_ref(); // held by epoll instance
 }

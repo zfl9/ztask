@@ -3,6 +3,7 @@
 #include <type_traits>
 #include <utility>
 #include <new>
+#include "z_ref.hpp"
 #include "z_util.hpp"
 #include "z_waiter.hpp"
 #include "z_timer.hpp"
@@ -23,23 +24,7 @@ private:
     void *_payload = nullptr;
 
 public:
-    z_Task() noexcept = default;
-
-    z_Task(const z_Task &) = delete;
-    z_Task(z_Task &&) = delete;
-
-    z_Task &operator=(const z_Task &) = delete;
-    z_Task &operator=(z_Task &&) = delete;
-
-    z_Task *ref() noexcept {
-        ++ref_count;
-        return this;
-    }
-
-    void unref() noexcept {
-        if (--ref_count == 0)
-            delete this;
-    }
+    z_ref_impl(z_Task);
 
     void resume(z_Waker waker, void *payload) noexcept {
         if (terminated) [[unlikely]] return;
@@ -47,7 +32,7 @@ public:
         _payload = payload;
         if (do_resume()) {
             terminate();
-            unref();
+            drop_ref(); /* execution flow */
         }
     }
 
@@ -81,7 +66,7 @@ public:
     }
 
 protected:
-    // task must have a destructor
+    z_Task() noexcept = default;
     virtual ~z_Task() noexcept = default;
 
     // @return true(DONE), false(YIELD)
@@ -96,28 +81,6 @@ protected:
         terminated = true;
         return true;
     }
-};
-
-struct z_TaskRef {
-private:
-    z_Task *task = nullptr;
-
-public:
-    explicit z_TaskRef(z_Task *task) noexcept : task{task} {}
-    ~z_TaskRef() noexcept { if (task) task->unref(); }
-
-    z_TaskRef(z_TaskRef &&other) noexcept : task{std::exchange(other.task, nullptr)} {}
-    z_TaskRef(const z_TaskRef &) = delete; // use `share()` instead
-
-    z_TaskRef &operator=(z_TaskRef &&) = delete;
-    z_TaskRef &operator=(const z_TaskRef &) = delete;
-
-    z_Task *operator->() const noexcept { return task; }
-    z_Task &operator*() const noexcept { return *task; }
-    explicit operator bool() const noexcept { return task != nullptr; }
-
-    [[nodiscard]] z_TaskRef share() const noexcept { return z_TaskRef{ task->ref() }; } // ref++
-    [[nodiscard]] z_Task *raw() const noexcept { return task; } // raw pointer
 };
 
 // task fields (`z_call` is available)
@@ -209,26 +172,24 @@ void z_subtask_deinit(T *task) noexcept {
 #define z_waiter() (&z_current()->waiter)
 #define z_timer() (&z_current()->timer)
 
-#define z_yield(resume_logic...) do { \
+#define z_yield() do { \
     this->_z_resume_point = z_label_addr(); \
     return false; \
-    Z_LABEL: \
-    resume_logic; \
+    Z_LABEL: ; \
 } while (0)
 
 // passed by `task->resume(waker, payload)`
 #define z_waker() (z_current()->waker())
 #define z_payload(T) (static_cast<T>(z_current()->payload()))
 
-#define z_ret(final_logic...) do { \
+#define z_ret() do { \
     this->_z_resume_point = INT32_MIN; /* fail-fast */ \
-    final_logic; \
     return true; \
 } while (0)
 
-#define z_return(result, final_logic...) do { \
+#define z_return(result) do { \
     if (z_result()) *z_result() = std::move(result); \
-    z_ret(final_logic); \
+    z_ret(); \
 } while (0)
 
 // @param result: `Result *`, use `z_no_result()` to ignore
@@ -247,12 +208,12 @@ Z_LABEL: \
     if (z_current()->is_canceled()) [[unlikely]] z_ret(); \
 } while (0)
 
-// the caller owns a reference (z_TaskRef)
+// the caller owns a reference (z_Ref<z_Task>)
 #define z_spawn(T, ctor_args...) ({ \
     z_Task *__z_spawn_task = new (std::nothrow) T{ctor_args}; \
     if (__z_spawn_task) [[likely]] \
         __z_spawn_task->resume(z_Waker::_START, nullptr); \
-    z_TaskRef{__z_spawn_task}; \
+    z_Ref<z_Task>{__z_spawn_task}; \
 })
 
 // create and start task (fire and forget)
