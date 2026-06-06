@@ -123,7 +123,7 @@ void z_TimerMgr::link_timer(unsigned level, unsigned index, z_Timer *timer) noex
     timer->index = index;
 }
 
-uint64_t z_TimerMgr::timeout() const noexcept {
+uint64_t z_TimerMgr::distance() const noexcept {
     if (bitset_0[0] | bitset_0[1] | bitset_0[2] | bitset_0[3]) {
         auto cur = current & 0xFF;
         auto dist = next_bit<4>(bitset_0, cur) - cur;
@@ -151,23 +151,40 @@ uint64_t z_TimerMgr::timeout() const noexcept {
     return UINT64_MAX;
 }
 
+uint64_t z_TimerMgr::timeout() const noexcept {
+    uint64_t sleep_ms = distance();
+
+    // to prevent oversleeping
+    if (sleep_ms != UINT64_MAX && current < g.tick_time) {
+        uint64_t elapsed = g.tick_time - current;
+        if (elapsed <= sleep_ms)
+            sleep_ms -= elapsed;
+        else
+            sleep_ms = 0;
+    }
+
+    return sleep_ms;
+}
+
 int z_TimerMgr::epoll_timeout() const noexcept {
-    uint64_t res = timeout();
+    uint64_t sleep_ms = timeout();
 
     // no timer
-    if (res == UINT64_MAX)
+    if (sleep_ms == UINT64_MAX)
         return -1;
 
     // overflow
-    if (res > (uint64_t)(INT_MAX))
+    if (sleep_ms > (uint64_t)(INT_MAX))
         return INT_MAX;
 
-    return (int)res;
+    return (int)sleep_ms;
 }
 
-void z_TimerMgr::update(uint64_t now) noexcept {
+void z_TimerMgr::update() noexcept {
+    uint64_t now = g.tick_time;
+
     while (current < now) {
-        uint64_t step = timeout();
+        uint64_t step = distance();
         uint64_t max_step = now - current;
 
         if (step > max_step) {

@@ -38,14 +38,14 @@ public:
 
     struct z_read {
         z_leaf_fields();
-        size_t n_read = 0;
+        ssize_t n_read = 0;
         z_deinit(z_read) {}
         z_function(ssize_t, z_Fd *fd, void *buf, size_t len, size_t at_least = 0);
     };
 
     struct z_write {
         z_leaf_fields();
-        size_t n_write = 0;
+        ssize_t n_write = 0;
         z_deinit(z_write) {}
         z_function(ssize_t, z_Fd *fd, const void *buf, size_t len);
     };

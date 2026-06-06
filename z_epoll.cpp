@@ -4,7 +4,7 @@
 #include <unistd.h>
 #include <sys/epoll.h>
 #include "g.hpp"
-#include "log.h"
+#include "log.hpp"
 #include "z_timer.hpp"
 
 z_Epoll::z_Epoll() noexcept {
@@ -21,17 +21,13 @@ void z_Epoll::run() noexcept {
     struct epoll_event events[max_events];
 
     for (;;) {
-        g::update_now();
-        g::timer_mgr.update(g::now); // may trigger the user callback
-
         flush_dirty_fds();
-        int timeout = g::timer_mgr.epoll_timeout();
+        int timeout = g.timer_mgr()->epoll_timeout();
         int n_events = epoll_wait(ep_fd, events, max_events, timeout);
 
-        g::update_now();
+        g.time_update();
 
-        if (n_events < 0) [[unlikely]] {
-            if (errno == EINTR) continue;
+        if (n_events < 0 && errno != EINTR) [[unlikely]] {
             log_error("epoll_wait(fd:%d, timeout:%d): (%d) %m", ep_fd, timeout, errno);
             break;
         }
@@ -42,7 +38,7 @@ void z_Epoll::run() noexcept {
         }
 
         // must be placed after `add_ref()`
-        g::timer_mgr.update(g::now);
+        g.timer_mgr()->update();
 
         for (int i = 0; i < n_events; ++i) {
             z_Fd *fd = (z_Fd *)events[i].data.ptr;

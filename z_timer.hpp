@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include "z_list.hpp"
+#include "g.hpp"
 
 struct z_Timer {
     using Callback = void (*)(z_Timer *timer) noexcept;
@@ -34,13 +35,16 @@ private:
     uint64_t current{}; // clock_monotonic in ms
 
 public:
-    explicit z_TimerMgr(uint64_t now) noexcept : current{now} {}
+    explicit z_TimerMgr() noexcept : current{g.tick_time} {}
 
     ~z_TimerMgr() noexcept = default;
 
     void add_timer(z_Timer *timer) noexcept;
 
     void del_timer(z_Timer *timer) noexcept;
+
+    // distance from `current` to first-timer, or UINT64_MAX if no timer
+    uint64_t distance() const noexcept;
 
     // if no timer is pending, return UINT64_MAX
     uint64_t timeout() const noexcept;
@@ -49,7 +53,7 @@ public:
     int epoll_timeout() const noexcept;
 
     // advance current time to now && trigger timers
-    void update(uint64_t now) noexcept;
+    void update() noexcept;
 
 private:
     void do_add_timer(z_Timer *timer) noexcept;
