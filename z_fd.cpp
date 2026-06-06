@@ -5,13 +5,16 @@
 void z_Fd::close() noexcept {
     if (raw_fd >= 0) {
         g::on_fd_close(this);
-        ::close(raw_fd);
+
+        int fd = raw_fd;
         raw_fd = -1;
 
         // wake up all waiters
         on_event(false, false);
         assert(read_wq.is_empty());
         assert(write_wq.is_empty());
+
+        ::close(fd);
     }
 }
 

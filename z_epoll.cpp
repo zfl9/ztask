@@ -17,7 +17,7 @@ z_Epoll::~z_Epoll() noexcept {
 }
 
 void z_Epoll::run() noexcept {
-    constexpr int max_events = 128;
+    constexpr int max_events = 256;
     struct epoll_event events[max_events];
 
     for (;;) {
