@@ -1,6 +1,5 @@
 #include "z_epoll.hpp"
 #include <errno.h>
-#include <signal.h>
 #include <unistd.h>
 #include <sys/epoll.h>
 #include "g.hpp"
@@ -8,7 +7,6 @@
 #include "z_timer.hpp"
 
 z_Epoll::z_Epoll() noexcept {
-    ::signal(SIGPIPE, SIG_IGN);
     ep_fd = epoll_create1(EPOLL_CLOEXEC);
 }
 

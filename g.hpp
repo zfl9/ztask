@@ -12,7 +12,7 @@ struct G {
     uint64_t wall_time; // clock_realtime in ms
     char wall_timestr[24]; // "2026-06-06 15:44:03.136"
 
-    G() noexcept { time_update(); };
+    G() noexcept;
     ~G() noexcept = default;
 
     // update the `tick_time`, `wall_time*`

@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <ctime>
 #include <cstring>
+#include <csignal>
 #include "z_epoll.hpp"
 #include "z_timer.hpp"
 
@@ -40,7 +41,7 @@ namespace {
         "80" "81" "82" "83" "84" "85" "86" "87" "88" "89"
         "90" "91" "92" "93" "94" "95" "96" "97" "98" "99";
 
-    void write_digit_pair(char *dst, unsigned num) {
+    void write_digit_pair(char *dst, unsigned num) noexcept {
         memcpy(dst, &digit_pairs[num * 2], 2);
     }
 
@@ -78,6 +79,11 @@ namespace {
         buf[22] = '0' + (ms % 10);
         buf[23] = '\0';
     }
+}
+
+G::G() noexcept {
+    time_update();
+    signal(SIGPIPE, SIG_IGN);
 }
 
 void G::time_update() noexcept {
