@@ -3,6 +3,12 @@
 #include <concepts>
 #include <type_traits>
 
+#define Z_STRINGIZE_(x) #x
+#define Z_STRINGIZE(x) Z_STRINGIZE_(x)
+
+#define Z_CONCAT_(a, b) a##b
+#define Z_CONCAT(a, b) Z_CONCAT_(a, b)
+
 template<typename T>
 concept z_pure_c_type =
     std::is_trivially_default_constructible_v<T> &&

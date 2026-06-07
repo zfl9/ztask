@@ -5,8 +5,18 @@
 #include <cstring>
 #include <csignal>
 #include <cassert>
+#include "z_util.hpp"
 #include "z_epoll.hpp"
 #include "z_timer.hpp"
+
+// user setting: local-exec, initial-exec, local-dynamic, global-dynamic
+#ifdef Z_TLS_MODEL
+#define z_tls_model Z_STRINGIZE(Z_TLS_MODEL)
+#else
+#define z_tls_model "local-exec"
+#endif
+
+#define z_attr_tls_model __attribute__((tls_model(z_tls_model)))
 
 // internal helper
 namespace {
@@ -126,7 +136,7 @@ namespace {
         }
     };
 
-    alignas(z_EnvImpl) __thread char z_env_impl_storage[sizeof(z_EnvImpl)];
+    alignas(z_EnvImpl) __thread char z_env_impl_storage[sizeof(z_EnvImpl)] z_attr_tls_model;
 
     #define z_env_impl (reinterpret_cast<z_EnvImpl *>(z_env_impl_storage))
 }

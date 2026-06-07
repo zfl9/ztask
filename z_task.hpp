@@ -163,8 +163,6 @@ void z_subtask_deinit(T *task) noexcept {
 // z_call ignore the result
 #define z_no_result() (nullptr)
 
-#define Z_CONCAT_(a, b) a##b
-#define Z_CONCAT(a, b) Z_CONCAT_(a, b)
 #define Z_LABEL Z_CONCAT(z_label_, __LINE__)
 #define z_label_addr() ((int32_t)((intptr_t)&&Z_LABEL - (intptr_t)&&z_label_base))
 #define z_resume_point() ((void *)((intptr_t)&&z_label_base + (intptr_t)this->_z_resume_point))
