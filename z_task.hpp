@@ -163,8 +163,8 @@ void z_subtask_deinit(T *task) noexcept {
 // z_call ignore the result
 #define z_no_result() (nullptr)
 
-#define Z_LABEL Z_CONCAT(z_label_, __LINE__)
-#define z_label_addr() ((int32_t)((intptr_t)&&Z_LABEL - (intptr_t)&&z_label_base))
+#define z_label Z_CONCAT(z_label_, __LINE__)
+#define z_label_addr() ((int32_t)((intptr_t)&&z_label - (intptr_t)&&z_label_base))
 #define z_resume_point() ((void *)((intptr_t)&&z_label_base + (intptr_t)this->_z_resume_point))
 
 // place this at the beginning of the body of `z_function`
@@ -179,7 +179,7 @@ void z_subtask_deinit(T *task) noexcept {
 #define z_yield() do { \
     this->_z_resume_point = z_label_addr(); \
     return false; \
-    Z_LABEL: ; \
+    z_label: ; \
 } while (0)
 
 // passed by `task->resume(waker, payload)`
@@ -202,7 +202,7 @@ void z_subtask_deinit(T *task) noexcept {
     using z_SubTask = std::remove_reference_t<decltype(this->_z_subtask_u.taskname)>; \
     new (&this->_z_subtask_u.taskname) z_SubTask{}; \
     this->_z_subtask_deinit = [] (z_SubTaskU *u) static noexcept { u->taskname.~z_SubTask(); }; \
-Z_LABEL: \
+z_label: \
     if (!this->_z_subtask_u.taskname((result), z_current(), ##args)) { \
         this->_z_resume_point = z_label_addr(); \
         return false; \
