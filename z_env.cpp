@@ -3,7 +3,6 @@
 #include <cstdio>
 #include <ctime>
 #include <cstring>
-#include <csignal>
 #include <cassert>
 #include "z_util.hpp"
 #include "z_epoll.hpp"
@@ -144,7 +143,6 @@ namespace {
 // ================== z_EnvInit (guard) ==================
 
 z_EnvInit::z_EnvInit() noexcept {
-    signal(SIGPIPE, SIG_IGN);
     new (z_env_impl_storage) z_EnvImpl{};
 }
 
