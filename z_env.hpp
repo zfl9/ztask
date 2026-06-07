@@ -32,7 +32,7 @@ struct z_env {
     static void on_fd_close(z_Fd *fd) noexcept;
 };
 
-// place it at the beginning of `main()` or `thread_main()`:
+// place it at the beginning of `main()` and `thread_main()`:
 // `z_EnvInit z_env_init{};`
 struct z_EnvInit {
     z_EnvInit() noexcept;
