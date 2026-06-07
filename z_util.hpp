@@ -48,7 +48,7 @@ const auto *z_container_of(const Field *p) noexcept {
     return reinterpret_cast<const Container *>(reinterpret_cast<const char *>(p) - offset);
 }
 
-inline void z_ingore_sigpipe() noexcept {
+inline void z_ignore_sigpipe() noexcept {
     struct sigaction sa{};
     sa.sa_handler = SIG_IGN;
     sigemptyset(&sa.sa_mask);

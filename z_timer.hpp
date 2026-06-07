@@ -35,7 +35,7 @@ private:
     uint64_t current{}; // clock_monotonic in ms
 
 public:
-    explicit z_TimerMgr() noexcept : current{z_env::tick_time()} {}
+    z_TimerMgr() noexcept : current{z_env::tick_time()} {}
 
     ~z_TimerMgr() noexcept = default;
 
