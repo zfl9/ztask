@@ -3,6 +3,7 @@
 #include <ctime>
 #include <cstring>
 #include <csignal>
+#include <cassert>
 #include "z_epoll.hpp"
 #include "z_timer.hpp"
 

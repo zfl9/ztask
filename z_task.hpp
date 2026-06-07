@@ -20,19 +20,25 @@ private:
     // cancellation signal received
     bool canceled = false;
     // task->resume(waker, payload)
-    z_Waker _waker = z_Waker::_START;
+    z_Waker _waker = z_Waker::_NULL;
     void *_payload = nullptr;
 
 public:
     z_ref_impl(z_Task);
 
     void resume(z_Waker waker, void *payload) noexcept {
+        assert(_waker == z_Waker::_NULL && _payload == nullptr);
         if (terminated) [[unlikely]] return;
+
         _waker = waker;
         _payload = payload;
-        if (do_resume()) {
-            terminate();
-            drop_ref(); /* execution flow */
+        bool end = do_resume();
+        _waker = z_Waker::_NULL;
+        _payload = nullptr;
+
+        if (end) {
+            terminate(); /* destroy the root-task */
+            drop_ref(); /* held by execution flow, `delete this` may occur here */
         }
     }
 

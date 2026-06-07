@@ -7,6 +7,7 @@ enum class z_Waker : uint8_t {
     TIMER, // trigger by timer (sleep or timeout)
     CANCEL, // trigger by task->cancel()
     _START, // start the task (internal)
+    _NULL, // no waker (sentinel)
 };
 
 struct z_Waiter {
