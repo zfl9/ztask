@@ -1,7 +1,7 @@
 #pragma once
 #include <cstdint>
 #include "z_list.hpp"
-#include "g.hpp"
+#include "z_env.hpp"
 
 struct z_Timer {
     using Callback = void (*)(z_Timer *timer) noexcept;
@@ -35,7 +35,7 @@ private:
     uint64_t current{}; // clock_monotonic in ms
 
 public:
-    explicit z_TimerMgr() noexcept : current{g.tick_time} {}
+    explicit z_TimerMgr() noexcept : current{z_env::tick_time()} {}
 
     ~z_TimerMgr() noexcept = default;
 

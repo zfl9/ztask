@@ -2,7 +2,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <sys/epoll.h>
-#include "g.hpp"
+#include "z_env.hpp"
 #include "z_log.hpp"
 #include "z_timer.hpp"
 
@@ -20,10 +20,10 @@ void z_Epoll::run() noexcept {
 
     for (;;) {
         flush_dirty_fds();
-        int timeout = g.timer_mgr()->epoll_timeout();
+        int timeout = z_env::timer_mgr()->epoll_timeout();
         int n_events = epoll_wait(ep_fd, events, max_events, timeout);
 
-        g.time_update();
+        z_env::time_update();
 
         if (n_events < 0 && errno != EINTR) [[unlikely]] {
             z_log_error("epoll_wait(fd:%d, timeout:%d): (%d) %m", ep_fd, timeout, errno);
@@ -36,7 +36,7 @@ void z_Epoll::run() noexcept {
         }
 
         // must be placed after `add_ref()`
-        g.timer_mgr()->update();
+        z_env::timer_mgr()->update();
 
         for (int i = 0; i < n_events; ++i) {
             z_Fd *fd = (z_Fd *)events[i].data.ptr;

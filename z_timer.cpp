@@ -155,8 +155,9 @@ uint64_t z_TimerMgr::timeout() const noexcept {
     uint64_t sleep_ms = distance();
 
     // to prevent oversleeping
-    if (sleep_ms != UINT64_MAX && current < g.tick_time) {
-        uint64_t elapsed = g.tick_time - current;
+    uint64_t now = z_env::tick_time();
+    if (sleep_ms != UINT64_MAX && current < now) {
+        uint64_t elapsed = now - current;
         if (elapsed <= sleep_ms)
             sleep_ms -= elapsed;
         else
@@ -181,7 +182,7 @@ int z_TimerMgr::epoll_timeout() const noexcept {
 }
 
 void z_TimerMgr::update() noexcept {
-    uint64_t now = g.tick_time;
+    uint64_t now = z_env::tick_time();
 
     while (current < now) {
         uint64_t step = distance();

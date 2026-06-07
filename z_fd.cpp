@@ -1,11 +1,11 @@
 #include "z_fd.hpp"
 #include <unistd.h>
 #include <errno.h>
-#include "g.hpp"
+#include "z_env.hpp"
 
 void z_Fd::close() noexcept {
     if (raw_fd >= 0) {
-        g.on_fd_close(this);
+        z_env::on_fd_close(this);
 
         int fd = raw_fd;
         raw_fd = -1;
@@ -22,23 +22,23 @@ void z_Fd::close() noexcept {
 void z_Fd::add_read_w(z_Waiter *w) noexcept {
     assert(!has_data && !is_closed());
     read_wq.push_tail(w);
-    g.on_fd_dirty(this);
+    z_env::on_fd_dirty(this);
 }
 
 void z_Fd::add_write_w(z_Waiter *w) noexcept {
     assert(!has_space && !is_closed());
     write_wq.push_tail(w);
-    g.on_fd_dirty(this);
+    z_env::on_fd_dirty(this);
 }
 
 void z_Fd::del_read_w(z_Waiter *w) noexcept {
     w->unlink();
-    g.on_fd_dirty(this);
+    z_env::on_fd_dirty(this);
 }
 
 void z_Fd::del_write_w(z_Waiter *w) noexcept {
     w->unlink();
-    g.on_fd_dirty(this);
+    z_env::on_fd_dirty(this);
 }
 
 void z_Fd::on_event(bool ev_data, bool ev_space) noexcept {

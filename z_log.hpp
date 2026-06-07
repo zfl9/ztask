@@ -1,11 +1,11 @@
 #pragma once
 #include <stdio.h>
-#include "g.hpp"
+#include "z_env.hpp"
 
 #define z_log_write(color, level, fmt, args...) do { \
     printf("\e[" color ";1m%s " level "\e[0m " \
         "\e[1m[%s:%d %s]\e[0m " fmt "\n", \
-        g.wall_timestr, __FILE__, __LINE__, __func__, ##args); \
+        z_env::wall_timestr(), __FILE__, __LINE__, __func__, ##args); \
 } while (0)
 
 #define z_log_info(fmt, args...) \
