@@ -3,7 +3,7 @@
 #include <unistd.h>
 #include <sys/epoll.h>
 #include "g.hpp"
-#include "log.hpp"
+#include "z_log.hpp"
 #include "z_timer.hpp"
 
 z_Epoll::z_Epoll() noexcept {
@@ -26,7 +26,7 @@ void z_Epoll::run() noexcept {
         g.time_update();
 
         if (n_events < 0 && errno != EINTR) [[unlikely]] {
-            log_error("epoll_wait(fd:%d, timeout:%d): (%d) %m", ep_fd, timeout, errno);
+            z_log_error("epoll_wait(fd:%d, timeout:%d): (%d) %m", ep_fd, timeout, errno);
             break;
         }
 
