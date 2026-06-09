@@ -1,4 +1,5 @@
 #include "z_fd.hpp"
+#include <sys/socket.h>
 #include <unistd.h>
 #include <errno.h>
 #include "z_env.hpp"
@@ -78,20 +79,22 @@ z_function_def(z_Fd::z_read, ssize_t, z_Fd *fd, void *buf, size_t len, size_t at
                 case z_Waker::RESOURCE:
                     assert(!z_waiter()->linked());
                     if (fd->is_closed()) [[unlikely]] {
-                        n_read = -ESHUTDOWN;
+                        errno = ESHUTDOWN;
+                        n_read = -1;
                         goto out;
                     }
                     continue;
                 case z_Waker::CANCEL:
                     fd->del_read_w(z_waiter());
-                    n_read = -ECANCELED;
+                    errno = ECANCELED;
+                    n_read = -1;
                     goto out;
                 default:
                     std::unreachable();
             }
         } else {
             // error
-            n_read = -errno;
+            n_read = -1;
             goto out;
         }
     }
@@ -115,20 +118,22 @@ z_function_def(z_Fd::z_write, ssize_t, z_Fd *fd, const void *buf, size_t len) {
                 case z_Waker::RESOURCE:
                     assert(!z_waiter()->linked());
                     if (fd->is_closed()) [[unlikely]] {
-                        n_write = -ESHUTDOWN;
+                        errno = ESHUTDOWN;
+                        n_write = -1;
                         goto out;
                     }
                     continue;
                 case z_Waker::CANCEL:
                     fd->del_write_w(z_waiter());
-                    n_write = -ECANCELED;
+                    errno = ECANCELED;
+                    n_write = -1;
                     goto out;
                 default:
                     std::unreachable();
             }
         } else {
             // error
-            n_write = -errno;
+            n_write = -1;
             goto out;
         }
     }
@@ -137,14 +142,12 @@ z_function_def(z_Fd::z_write, ssize_t, z_Fd *fd, const void *buf, size_t len) {
     z_return(n_write);
 }
 
-z_function_def(z_Fd::z_accept, int, z_Fd *fd, struct sockaddr *addr, socklen_t *addrlen, int flags) {
-    flags |= SOCK_NONBLOCK | SOCK_CLOEXEC;
-
+z_function_def(z_Fd::z_accept, int, z_Fd *fd, z_net::Addr *addr) {
     z_begin();
 
     int new_fd;
     for (;;) {
-        new_fd = ::accept4(fd->raw_fd, addr, addrlen, flags);
+        new_fd = z_net::accept(fd->raw_fd, addr);
         if (new_fd >= 0) {
             break;
         } else if (errno == EAGAIN) {
@@ -155,20 +158,21 @@ z_function_def(z_Fd::z_accept, int, z_Fd *fd, struct sockaddr *addr, socklen_t *
                 case z_Waker::RESOURCE:
                     assert(!z_waiter()->linked());
                     if (fd->is_closed()) [[unlikely]] {
-                        new_fd = -ESHUTDOWN;
+                        errno = ESHUTDOWN;
+                        new_fd = -1;
                         goto out;
                     }
                     continue;
                 case z_Waker::CANCEL:
                     fd->del_read_w(z_waiter());
-                    new_fd = -ECANCELED;
+                    errno = ECANCELED;
+                    new_fd = -1;
                     goto out;
                 default:
                     std::unreachable();
             }
         } else {
             // error
-            new_fd = -errno;
             goto out;
         }
     }
@@ -177,37 +181,119 @@ z_function_def(z_Fd::z_accept, int, z_Fd *fd, struct sockaddr *addr, socklen_t *
     z_return(new_fd);
 }
 
-z_function_def(z_Fd::z_connect, int, z_Fd *fd, const struct sockaddr *addr, socklen_t addrlen) {
+z_function_def(z_Fd::z_connect, int, z_Fd *fd, const z_net::Addr *addr) {
     z_begin();
 
-    int res; res = ::connect(fd->raw_fd, addr, addrlen);
-    if (res == 0) goto out;
-
-    if (errno != EINPROGRESS) {
-        res = -errno;
+    int res; res = z_net::connect(fd->raw_fd, addr);
+    if (res == 0 || errno != EINPROGRESS) [[unlikely]]
         goto out;
-    }
 
     fd->has_space = false;
     fd->add_write_w(z_waiter());
     z_yield();
     switch (z_waker()) {
-        case z_Waker::RESOURCE: {
+        case z_Waker::RESOURCE:
             assert(!z_waiter()->linked());
             if (fd->is_closed()) [[unlikely]] {
-                res = -ESHUTDOWN;
-                goto out;
+                errno = ESHUTDOWN;
+                res = -1;
+            } else if (!z_net::getsockopt_int(fd->raw_fd, SOL_SOCKET, SO_ERROR, &res)) [[unlikely]] {
+                // getsockopt fail
+                res = -1;
+            } else if (res != 0) [[unlikely]] {
+                // socket error
+                errno = res;
+                res = -1;
+            } else {
+                // connect succ
+                res = 0;
             }
-            int opt_err = ::getsockopt(fd->raw_fd, SOL_SOCKET, SO_ERROR, &res, (socklen_t *)&res);
-            res = (opt_err == 0) ? -res : -errno;
             goto out;
-        }
         case z_Waker::CANCEL:
             fd->del_write_w(z_waiter());
-            res = -ECANCELED;
+            errno = ECANCELED;
+            res = -1;
             goto out;
         default:
             std::unreachable();
+    }
+
+    out:
+    z_return(res);
+}
+
+z_function_def(z_Fd::z_recvfrom, ssize_t, z_Fd *fd, void *buf, size_t len, z_net::Addr *addr, int flags) {
+    z_begin();
+
+    ssize_t res;
+    for (;;) {
+        res = z_net::recvfrom(fd->raw_fd, buf, len, addr, flags);
+        if (res >= 0) {
+            break;
+        } else if (errno == EAGAIN) {
+            fd->has_data = false;
+            fd->add_read_w(z_waiter());
+            z_yield();
+            switch (z_waker()) {
+                case z_Waker::RESOURCE:
+                    assert(!z_waiter()->linked());
+                    if (fd->is_closed()) [[unlikely]] {
+                        errno = ESHUTDOWN;
+                        res = -1;
+                        goto out;
+                    }
+                    continue;
+                case z_Waker::CANCEL:
+                    fd->del_read_w(z_waiter());
+                    errno = ECANCELED;
+                    res = -1;
+                    goto out;
+                default:
+                    std::unreachable();
+            }
+        } else {
+            // error
+            goto out;
+        }
+    }
+
+    out:
+    z_return(res);
+}
+
+z_function_def(z_Fd::z_sendto, ssize_t, z_Fd *fd, const void *buf, size_t len, const z_net::Addr *addr, int flags) {
+    z_begin();
+
+    ssize_t res;
+    for (;;) {
+        res = z_net::sendto(fd->raw_fd, buf, len, addr, flags);
+        if (res >= 0) {
+            break;
+        } else if (errno == EAGAIN) {
+            fd->has_space = false;
+            fd->add_write_w(z_waiter());
+            z_yield();
+            switch (z_waker()) {
+                case z_Waker::RESOURCE:
+                    assert(!z_waiter()->linked());
+                    if (fd->is_closed()) [[unlikely]] {
+                        errno = ESHUTDOWN;
+                        res = -1;
+                        goto out;
+                    }
+                    continue;
+                case z_Waker::CANCEL:
+                    fd->del_write_w(z_waiter());
+                    errno = ECANCELED;
+                    res = -1;
+                    goto out;
+                default:
+                    std::unreachable();
+            }
+        } else {
+            // error
+            goto out;
+        }
     }
 
     out:

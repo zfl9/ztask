@@ -181,14 +181,6 @@ template<typename T, z_Node T::*node_field>
 struct z_List {
     z_Node root{};
 
-    z_List() noexcept = default;
-    ~z_List() noexcept = default;
-
-    z_List(z_List &&) = delete;
-    z_List(const z_List &) = delete;
-    z_List &operator=(z_List &&) = delete;
-    z_List &operator=(const z_List &) = delete;
-
     using binding = z_node_binding<T, node_field>;
 
     bool is_empty() const noexcept {

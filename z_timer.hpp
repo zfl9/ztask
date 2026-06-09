@@ -15,7 +15,9 @@ struct z_Timer {
     explicit z_Timer(Callback callback, uint64_t expire) noexcept
         : callback{callback}, expire{expire} {}
 
-    ~z_Timer() noexcept = default;
+    bool linked() const noexcept {
+        return node.linked();
+    }
 };
 
 using z_TimerList = z_List<z_Timer, &z_Timer::node>;
@@ -36,8 +38,6 @@ private:
 
 public:
     z_TimerMgr() noexcept : current{z_env::tick_time()} {}
-
-    ~z_TimerMgr() noexcept = default;
 
     void add_timer(z_Timer *timer) noexcept;
 

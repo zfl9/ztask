@@ -93,19 +93,11 @@ namespace {
 // z_env_impl (thread_local)
 namespace {
     struct z_EnvImpl {
-        uint64_t tick_time = 0;
-        uint64_t wall_time = 0;
-        std::array<char, 24> wall_timestr{};
+        uint64_t tick_time = sys_tick_time();
+        uint64_t wall_time = sys_wall_time();
+        std::array<char, 24> wall_timestr{init_wall_timestr(wall_time)};
         z_TimerMgr timer_mgr{};
         z_Epoll epoll{};
-
-        z_EnvImpl() noexcept :
-            tick_time{sys_tick_time()},
-            wall_time{sys_wall_time()},
-            wall_timestr{init_wall_timestr(wall_time)}
-        {}
-
-        ~z_EnvImpl() noexcept = default;
 
         void time_update() noexcept {
             tick_time = sys_tick_time();

@@ -19,8 +19,6 @@ struct z_Waiter {
     explicit z_Waiter(Callback callback) noexcept
         : callback{callback} {}
 
-    ~z_Waiter() noexcept = default;
-
     bool linked() const noexcept {
         return node.linked();
     }

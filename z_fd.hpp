@@ -4,6 +4,7 @@
 #include "z_ref.hpp"
 #include "z_task.hpp"
 #include "z_waiter.hpp"
+#include "z_net.hpp"
 
 struct z_Fd {
     friend struct z_Epoll;
@@ -53,12 +54,24 @@ public:
     struct z_accept {
         z_leaf_fields();
         z_deinit(z_accept) {}
-        z_function(int, z_Fd *fd, struct sockaddr *addr = nullptr, socklen_t *addrlen = nullptr, int flags = 0);
+        z_function(int, z_Fd *fd, z_net::Addr *addr);
     };
 
     struct z_connect {
         z_leaf_fields();
         z_deinit(z_connect) {}
-        z_function(int, z_Fd *fd, const struct sockaddr *addr, socklen_t addrlen);
+        z_function(int, z_Fd *fd, const z_net::Addr *addr);
+    };
+
+    struct z_recvfrom {
+        z_leaf_fields();
+        z_deinit(z_recvfrom) {}
+        z_function(ssize_t, z_Fd *fd, void *buf, size_t len, z_net::Addr *addr, int flags = 0);
+    };
+
+    struct z_sendto {
+        z_leaf_fields();
+        z_deinit(z_sendto) {}
+        z_function(ssize_t, z_Fd *fd, const void *buf, size_t len, const z_net::Addr *addr, int flags = 0);
     };
 };
