@@ -49,23 +49,103 @@ void z_Fd::on_event(bool ev_data, bool ev_space) noexcept {
     while (has_data || is_closed()) {
         auto *w = read_wq.pop_head();
         if (!w) break;
-        w->callback(w, z_Waker::RESOURCE, this);
+        w->callback(w, this);
     }
     while (has_space || is_closed()) {
         auto *w = write_wq.pop_head();
         if (!w) break;
-        w->callback(w, z_Waker::RESOURCE, this);
+        w->callback(w, this);
     }
 }
 
-z_function_def(z_Fd::z_read, ssize_t, z_Fd *fd, void *buf, size_t len, size_t at_least) {
-    if (at_least > len)
-        at_least = len;
+namespace {
+    struct iov_slice_result {
+        const iovec *iov;
+        int iovcnt;
+    };
 
+    iov_slice_result iov_slice(iovec *tmp_iov, int tmp_iovmax,
+        const iovec *user_iov, int user_iovcnt,
+        size_t skip_bytes) noexcept
+    {
+        int skip_iovcnt = 0;
+        while (skip_iovcnt < user_iovcnt) {
+            if (skip_bytes >= user_iov[skip_iovcnt].iov_len) {
+                skip_bytes -= user_iov[skip_iovcnt].iov_len;
+                ++skip_iovcnt;
+            } else {
+                break;
+            }
+        }
+
+        if (skip_bytes == 0) {
+            return {
+                .iov = user_iov + skip_iovcnt, 
+                .iovcnt = user_iovcnt - skip_iovcnt,
+            };
+        } else {
+            int iovcnt = user_iovcnt - skip_iovcnt;
+            if (iovcnt > tmp_iovmax) [[unlikely]] {
+                errno = EINVAL;
+                return {}; // null
+            }
+
+            tmp_iov[0] = {
+                .iov_base = (char *)user_iov[skip_iovcnt].iov_base + skip_bytes,
+                .iov_len = user_iov[skip_iovcnt].iov_len - skip_bytes,
+            };
+            memcpy(&tmp_iov[1], &user_iov[skip_iovcnt + 1], (iovcnt - 1) * sizeof(iovec));
+
+            return {
+                .iov = tmp_iov,
+                .iovcnt = iovcnt,
+            };
+        }
+    }
+
+    void on_error(ssize_t *__restrict n_bytes, int set_errno = 0) {
+        if (*n_bytes <= 0) {
+            if (set_errno) errno = set_errno;
+            *n_bytes = -1;
+        }
+    }
+}
+
+z_function_def(z_Fd::z_read, ssize_t, z_Fd *fd, void *buf, size_t len, Opt opt) {
+    iovec iov{
+        .iov_base = buf,
+        .iov_len = len,
+    };
+    return z_function_call(fd, &iov, 1, opt);
+}
+
+z_function_def(z_Fd::z_read, ssize_t, z_Fd *fd, const iovec *user_iov, int user_iovcnt, Opt opt) {
+    // parameter preprocessing
+    size_t buf_len = 0;
+    for (int i = 0; i < user_iovcnt; ++i)
+        buf_len += user_iov[i].iov_len;
+
+    if (opt.at_least < 1) opt.at_least = 1;
+    if (opt.at_least > buf_len) opt.at_least = buf_len;
+
+    // enter the state machine
     z_begin();
+    z_timer_arm(opt.timeout);
 
-    while (n_read == 0 || (size_t)n_read < at_least) {
-        ssize_t res; res = ::read(fd->raw_fd, (char *)buf + n_read, len - n_read);
+    while ((size_t)n_read < opt.at_least) {
+        ssize_t res;
+        {
+            constexpr int tmp_iovmax = 32;
+            iovec tmp_iov[tmp_iovmax];
+
+            auto [iov, iovcnt] = iov_slice(tmp_iov, tmp_iovmax, user_iov, user_iovcnt, n_read);
+            if (!iov) [[unlikely]] {
+                on_error(&n_read);
+                goto out;
+            }
+            res = ::readv(fd->raw_fd, iov, iovcnt);
+        }
+
         if (res > 0) {
             n_read += res;
         } else if (res == 0) {
@@ -75,75 +155,283 @@ z_function_def(z_Fd::z_read, ssize_t, z_Fd *fd, void *buf, size_t len, size_t at
             fd->has_data = false;
             fd->add_read_w(z_waiter());
             z_yield();
-            switch (z_waker()) {
-                case z_Waker::RESOURCE:
-                    assert(!z_waiter()->linked());
+            switch (z_event()) {
+                case z_Event::WAITER:
                     if (fd->is_closed()) [[unlikely]] {
-                        errno = ESHUTDOWN;
-                        n_read = -1;
+                        on_error(&n_read, ESHUTDOWN);
                         goto out;
                     }
                     continue;
-                case z_Waker::CANCEL:
+                case z_Event::TIMER:
+                case z_Event::CANCEL:
                     fd->del_read_w(z_waiter());
-                    errno = ECANCELED;
-                    n_read = -1;
+                    on_error(&n_read, (z_event() == z_Event::TIMER) ? ETIMEDOUT : ECANCELED);
                     goto out;
                 default:
                     std::unreachable();
             }
         } else {
             // error
-            n_read = -1;
+            on_error(&n_read);
             goto out;
         }
     }
 
     out:
+    z_timer_disarm();
     z_return(n_read);
 }
 
-z_function_def(z_Fd::z_write, ssize_t, z_Fd *fd, const void *buf, size_t len) {
-    z_begin();
+z_function_def(z_Fd::z_write, ssize_t, z_Fd *fd, const void *buf, size_t len, Opt opt) {
+    iovec iov{
+        .iov_base = (void *)buf,
+        .iov_len = len,
+    };
+    return z_function_call(fd, &iov, 1, opt);
+}
 
-    while ((size_t)n_write < len) {
-        ssize_t res; res = ::write(fd->raw_fd, (const char *)buf + n_write, len - n_write);
-        if (res >= 0) {
+z_function_def(z_Fd::z_write, ssize_t, z_Fd *fd, const iovec *user_iov, int user_iovcnt, Opt opt) {
+    size_t data_len = 0;
+    for (int i = 0; i < user_iovcnt; ++i)
+        data_len += user_iov[i].iov_len;
+
+    z_begin();
+    z_timer_arm(opt.timeout);
+
+    while ((size_t)n_write < data_len) {
+        ssize_t res;
+        {
+            constexpr int tmp_iovmax = 32;
+            iovec tmp_iov[tmp_iovmax];
+
+            auto [iov, iovcnt] = iov_slice(tmp_iov, tmp_iovmax, user_iov, user_iovcnt, n_write);
+            if (!iov) [[unlikely]] {
+                on_error(&n_write);
+                goto out;
+            }
+            res = ::writev(fd->raw_fd, iov, iovcnt);
+        }
+
+        if (res > 0) {
             n_write += res;
+        } else if (res == 0) {
+            // avoid infinite loop
+            goto out;
         } else if (errno == EAGAIN) {
             fd->has_space = false;
             fd->add_write_w(z_waiter());
             z_yield();
-            switch (z_waker()) {
-                case z_Waker::RESOURCE:
-                    assert(!z_waiter()->linked());
+            switch (z_event()) {
+                case z_Event::WAITER:
                     if (fd->is_closed()) [[unlikely]] {
-                        errno = ESHUTDOWN;
-                        n_write = -1;
+                        on_error(&n_write, ESHUTDOWN);
                         goto out;
                     }
                     continue;
-                case z_Waker::CANCEL:
+                case z_Event::TIMER:
+                case z_Event::CANCEL:
                     fd->del_write_w(z_waiter());
-                    errno = ECANCELED;
-                    n_write = -1;
+                    on_error(&n_write, (z_event() == z_Event::TIMER) ? ETIMEDOUT : ECANCELED);
                     goto out;
                 default:
                     std::unreachable();
             }
         } else {
             // error
-            n_write = -1;
+            on_error(&n_write);
             goto out;
         }
     }
 
     out:
+    z_timer_disarm();
     z_return(n_write);
 }
 
-z_function_def(z_Fd::z_accept, int, z_Fd *fd, z_net::Addr *addr) {
+z_function_def(z_Fd::z_recv, ssize_t, z_Fd *fd, void *buf, size_t len, Opt opt) {
+    iovec iov{
+        .iov_base = buf,
+        .iov_len = len,
+    };
+    msghdr msg{
+        .msg_name = opt.addr ? &opt.addr->sa : nullptr,
+        .msg_namelen = (socklen_t)(opt.addr ? sizeof(*opt.addr) : 0),
+        .msg_iov = &iov,
+        .msg_iovlen = 1,
+        .msg_control = nullptr,
+        .msg_controllen = 0,
+        .msg_flags = 0,
+    };
+    return z_function_call(fd, &msg, opt);
+}
+
+z_function_def(z_Fd::z_recv, ssize_t, z_Fd *fd, msghdr *msg, Opt opt) {
+    // parameter preprocessing
+    size_t buf_len = 0;
+    for (int i = 0; i < (int)msg->msg_iovlen; ++i)
+        buf_len += msg->msg_iov[i].iov_len;
+
+    if (opt.at_least < 1) opt.at_least = 1;
+    if (opt.at_least > buf_len) opt.at_least = buf_len;
+
+    // enter the state machine
     z_begin();
+    z_timer_arm(opt.timeout);
+
+    while ((size_t)n_read < opt.at_least || buf_len == 0) {
+        ssize_t res;
+        {
+            constexpr int tmp_iovmax = 32;
+            iovec tmp_iov[tmp_iovmax];
+
+            auto [iov, iovcnt] = iov_slice(tmp_iov, tmp_iovmax, msg->msg_iov, msg->msg_iovlen, n_read);
+            if (!iov) [[unlikely]] {
+                on_error(&n_read);
+                goto out;
+            }
+
+            msghdr tmp_msg{
+                .msg_name = msg->msg_name,
+                .msg_namelen = msg->msg_namelen,
+                .msg_iov = (iovec *)iov,
+                .msg_iovlen = (size_t)iovcnt,
+                .msg_control = msg->msg_control,
+                .msg_controllen = msg->msg_controllen,
+                .msg_flags = msg->msg_flags,
+            };
+            res = ::recvmsg(fd->raw_fd, &tmp_msg, opt.flags);
+            if (res >= 0) {
+                // sync back to original msghdr
+                msg->msg_namelen = tmp_msg.msg_namelen;
+                msg->msg_controllen = tmp_msg.msg_controllen;
+                msg->msg_flags = tmp_msg.msg_flags;
+            }
+        }
+
+        if (res > 0) {
+            n_read += res;
+        } else if (res == 0) {
+            // EOF
+            goto out;
+        } else if (errno == EAGAIN) {
+            fd->has_data = false;
+            fd->add_read_w(z_waiter());
+            z_yield();
+            switch (z_event()) {
+                case z_Event::WAITER:
+                    if (fd->is_closed()) [[unlikely]] {
+                        on_error(&n_read, ESHUTDOWN);
+                        goto out;
+                    }
+                    continue;
+                case z_Event::TIMER:
+                case z_Event::CANCEL:
+                    fd->del_read_w(z_waiter());
+                    on_error(&n_read, (z_event() == z_Event::TIMER) ? ETIMEDOUT : ECANCELED);
+                    goto out;
+                default:
+                    std::unreachable();
+            }
+        } else {
+            // error
+            on_error(&n_read);
+            goto out;
+        }
+    }
+
+    out:
+    z_timer_disarm();
+    z_return(n_read);
+}
+
+z_function_def(z_Fd::z_send, ssize_t, z_Fd *fd, const void *buf, size_t len, Opt opt) {
+    iovec iov{
+        .iov_base = (void *)buf,
+        .iov_len = len,
+    };
+    msghdr msg{
+        .msg_name = (void *)(opt.addr ? &opt.addr->sa : nullptr),
+        .msg_namelen = (socklen_t)(opt.addr ? sizeof(*opt.addr) : 0),
+        .msg_iov = &iov,
+        .msg_iovlen = 1,
+        .msg_control = nullptr,
+        .msg_controllen = 0,
+        .msg_flags = 0,
+    };
+    return z_function_call(fd, &msg, opt);
+}
+
+z_function_def(z_Fd::z_send, ssize_t, z_Fd *fd, const msghdr *msg, Opt opt) {
+    size_t data_len = 0;
+    for (int i = 0; i < (int)msg->msg_iovlen; ++i)
+        data_len += msg->msg_iov[i].iov_len;
+
+    z_begin();
+    z_timer_arm(opt.timeout);
+
+    while ((size_t)n_write < data_len || data_len == 0) {
+        ssize_t res;
+        {
+            constexpr int tmp_iovmax = 32;
+            iovec tmp_iov[tmp_iovmax];
+
+            auto [iov, iovcnt] = iov_slice(tmp_iov, tmp_iovmax, msg->msg_iov, msg->msg_iovlen, n_write);
+            if (!iov) [[unlikely]] {
+                on_error(&n_write);
+                goto out;
+            }
+
+            msghdr tmp_msg{
+                .msg_name = msg->msg_name,
+                .msg_namelen = msg->msg_namelen,
+                .msg_iov = (iovec *)iov,
+                .msg_iovlen = (size_t)iovcnt,
+                .msg_control = msg->msg_control,
+                .msg_controllen = msg->msg_controllen,
+                .msg_flags = msg->msg_flags,
+            };
+            res = ::sendmsg(fd->raw_fd, &tmp_msg, opt.flags);
+        }
+
+        if (res > 0) {
+            n_write += res;
+        } else if (res == 0) {
+            // avoid infinite loop
+            goto out;
+        } else if (errno == EAGAIN) {
+            fd->has_space = false;
+            fd->add_write_w(z_waiter());
+            z_yield();
+            switch (z_event()) {
+                case z_Event::WAITER:
+                    if (fd->is_closed()) [[unlikely]] {
+                        on_error(&n_write, ESHUTDOWN);
+                        goto out;
+                    }
+                    continue;
+                case z_Event::TIMER:
+                case z_Event::CANCEL:
+                    fd->del_write_w(z_waiter());
+                    on_error(&n_write, (z_event() == z_Event::TIMER) ? ETIMEDOUT : ECANCELED);
+                    goto out;
+                default:
+                    std::unreachable();
+            }
+        } else {
+            // error
+            on_error(&n_write);
+            goto out;
+        }
+    }
+
+    out:
+    z_timer_disarm();
+    z_return(n_write);
+}
+
+z_function_def(z_Fd::z_accept, int, z_Fd *fd, z_net::Addr *addr, Opt opt) {
+    z_begin();
+    z_timer_arm(opt.timeout);
 
     int new_fd;
     for (;;) {
@@ -154,16 +442,15 @@ z_function_def(z_Fd::z_accept, int, z_Fd *fd, z_net::Addr *addr) {
             fd->has_data = false;
             fd->add_read_w(z_waiter());
             z_yield();
-            switch (z_waker()) {
-                case z_Waker::RESOURCE:
-                    assert(!z_waiter()->linked());
+            switch (z_event()) {
+                case z_Event::WAITER:
                     if (fd->is_closed()) [[unlikely]] {
                         errno = ESHUTDOWN;
                         new_fd = -1;
                         goto out;
                     }
                     continue;
-                case z_Waker::CANCEL:
+                case z_Event::CANCEL:
                     fd->del_read_w(z_waiter());
                     errno = ECANCELED;
                     new_fd = -1;
@@ -178,11 +465,13 @@ z_function_def(z_Fd::z_accept, int, z_Fd *fd, z_net::Addr *addr) {
     }
 
     out:
+    z_timer_disarm();
     z_return(new_fd);
 }
 
-z_function_def(z_Fd::z_connect, int, z_Fd *fd, const z_net::Addr *addr) {
+z_function_def(z_Fd::z_connect, int, z_Fd *fd, const z_net::Addr *addr, Opt opt) {
     z_begin();
+    z_timer_arm(opt.timeout);
 
     int res; res = z_net::connect(fd->raw_fd, addr);
     if (res == 0 || errno != EINPROGRESS) [[unlikely]]
@@ -191,9 +480,8 @@ z_function_def(z_Fd::z_connect, int, z_Fd *fd, const z_net::Addr *addr) {
     fd->has_space = false;
     fd->add_write_w(z_waiter());
     z_yield();
-    switch (z_waker()) {
-        case z_Waker::RESOURCE:
-            assert(!z_waiter()->linked());
+    switch (z_event()) {
+        case z_Event::WAITER:
             if (fd->is_closed()) [[unlikely]] {
                 errno = ESHUTDOWN;
                 res = -1;
@@ -209,7 +497,7 @@ z_function_def(z_Fd::z_connect, int, z_Fd *fd, const z_net::Addr *addr) {
                 res = 0;
             }
             goto out;
-        case z_Waker::CANCEL:
+        case z_Event::CANCEL:
             fd->del_write_w(z_waiter());
             errno = ECANCELED;
             res = -1;
@@ -219,83 +507,6 @@ z_function_def(z_Fd::z_connect, int, z_Fd *fd, const z_net::Addr *addr) {
     }
 
     out:
-    z_return(res);
-}
-
-z_function_def(z_Fd::z_recvfrom, ssize_t, z_Fd *fd, void *buf, size_t len, z_net::Addr *addr, int flags) {
-    z_begin();
-
-    ssize_t res;
-    for (;;) {
-        res = z_net::recvfrom(fd->raw_fd, buf, len, addr, flags);
-        if (res >= 0) {
-            break;
-        } else if (errno == EAGAIN) {
-            fd->has_data = false;
-            fd->add_read_w(z_waiter());
-            z_yield();
-            switch (z_waker()) {
-                case z_Waker::RESOURCE:
-                    assert(!z_waiter()->linked());
-                    if (fd->is_closed()) [[unlikely]] {
-                        errno = ESHUTDOWN;
-                        res = -1;
-                        goto out;
-                    }
-                    continue;
-                case z_Waker::CANCEL:
-                    fd->del_read_w(z_waiter());
-                    errno = ECANCELED;
-                    res = -1;
-                    goto out;
-                default:
-                    std::unreachable();
-            }
-        } else {
-            // error
-            goto out;
-        }
-    }
-
-    out:
-    z_return(res);
-}
-
-z_function_def(z_Fd::z_sendto, ssize_t, z_Fd *fd, const void *buf, size_t len, const z_net::Addr *addr, int flags) {
-    z_begin();
-
-    ssize_t res;
-    for (;;) {
-        res = z_net::sendto(fd->raw_fd, buf, len, addr, flags);
-        if (res >= 0) {
-            break;
-        } else if (errno == EAGAIN) {
-            fd->has_space = false;
-            fd->add_write_w(z_waiter());
-            z_yield();
-            switch (z_waker()) {
-                case z_Waker::RESOURCE:
-                    assert(!z_waiter()->linked());
-                    if (fd->is_closed()) [[unlikely]] {
-                        errno = ESHUTDOWN;
-                        res = -1;
-                        goto out;
-                    }
-                    continue;
-                case z_Waker::CANCEL:
-                    fd->del_write_w(z_waiter());
-                    errno = ECANCELED;
-                    res = -1;
-                    goto out;
-                default:
-                    std::unreachable();
-            }
-        } else {
-            // error
-            goto out;
-        }
-    }
-
-    out:
+    z_timer_disarm();
     z_return(res);
 }

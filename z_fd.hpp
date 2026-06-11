@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <sys/uio.h>
 #include <sys/socket.h>
 #include "z_ref.hpp"
 #include "z_task.hpp"
@@ -37,41 +38,75 @@ public:
 
     void on_event(bool ev_data, bool ev_space) noexcept;
 
+    int shutdown(int how) noexcept { return ::shutdown(raw_fd, how); }
+
+    // for byte-stream
     struct z_read {
         z_leaf_fields();
         ssize_t n_read = 0;
         z_deinit(z_read) {}
-        z_function(ssize_t, z_Fd *fd, void *buf, size_t len, size_t at_least = 0);
+        struct Opt { size_t at_least; int timeout; };
+        z_function(ssize_t, z_Fd *fd, void *buf, size_t len, Opt opt = {});
+        z_function(ssize_t, z_Fd *fd, const iovec *iov, int iovcnt, Opt opt = {});
     };
 
+    // for byte-stream
     struct z_write {
         z_leaf_fields();
         ssize_t n_write = 0;
         z_deinit(z_write) {}
-        z_function(ssize_t, z_Fd *fd, const void *buf, size_t len);
+        struct Opt { int timeout; };
+        z_function(ssize_t, z_Fd *fd, const void *buf, size_t len, Opt opt = {});
+        z_function(ssize_t, z_Fd *fd, const iovec *iov, int iovcnt, Opt opt = {});
+    };
+
+    // for byte-stream or datagram
+    struct z_recv {
+        z_leaf_fields();
+        ssize_t n_read = 0;
+        z_deinit(z_recv) {}
+        struct Opt { size_t at_least; z_net::Addr *addr; int flags; int timeout; };
+        z_function(ssize_t, z_Fd *fd, void *buf, size_t len, Opt opt = {});
+        z_function(ssize_t, z_Fd *fd, msghdr *msg, Opt opt = {});
+    };
+
+    // for byte-stream or datagram
+    struct z_send {
+        z_leaf_fields();
+        ssize_t n_write = 0;
+        z_deinit(z_send) {}
+        struct Opt { const z_net::Addr *addr; int flags; int timeout; };
+        z_function(ssize_t, z_Fd *fd, const void *buf, size_t len, Opt opt = {});
+        z_function(ssize_t, z_Fd *fd, const msghdr *msg, Opt opt = {});
+    };
+
+    // for datagram
+    struct z_recvmmsg {
+        z_leaf_fields();
+        z_deinit(z_recvmmsg) {}
+        struct Opt { int flags; int timeout; };
+        z_function(int, z_Fd *fd, mmsghdr *msgv, unsigned vlen, Opt opt = {});
+    };
+
+    // for datagram
+    struct z_sendmmsg {
+        z_leaf_fields();
+        z_deinit(z_sendmmsg) {}
+        struct Opt { int flags; int timeout; };
+        z_function(int, z_Fd *fd, mmsghdr *msgv, unsigned vlen, Opt opt = {});
     };
 
     struct z_accept {
         z_leaf_fields();
         z_deinit(z_accept) {}
-        z_function(int, z_Fd *fd, z_net::Addr *addr);
+        struct Opt { int timeout; };
+        z_function(int, z_Fd *fd, z_net::Addr *addr, Opt opt = {});
     };
 
     struct z_connect {
         z_leaf_fields();
         z_deinit(z_connect) {}
-        z_function(int, z_Fd *fd, const z_net::Addr *addr);
-    };
-
-    struct z_recvfrom {
-        z_leaf_fields();
-        z_deinit(z_recvfrom) {}
-        z_function(ssize_t, z_Fd *fd, void *buf, size_t len, z_net::Addr *addr, int flags = 0);
-    };
-
-    struct z_sendto {
-        z_leaf_fields();
-        z_deinit(z_sendto) {}
-        z_function(ssize_t, z_Fd *fd, const void *buf, size_t len, const z_net::Addr *addr, int flags = 0);
+        struct Opt { int timeout; };
+        z_function(int, z_Fd *fd, const z_net::Addr *addr, Opt opt = {});
     };
 };

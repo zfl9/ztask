@@ -48,72 +48,66 @@ public:
 
     struct z_read {
         z_leaf_fields();
-
         z_deinit(z_read) {}
-
-        z_function(int, z_Channel *channel, T *item) {
+        z_function(int, z_Channel *channel, T *item, int timeout = 0) {
             z_begin();
+            z_timer_arm(timeout);
             int res;
             for (;;) {
                 res = channel->read(item);
-                if (res == 0) {
-                    break;
-                } else if (res == -EAGAIN) {
+                if (res != -EAGAIN) {
+                    goto out;
+                } else {
                     channel->add_read_w(z_waiter());
                     z_yield();
-                    switch (z_waker()) {
-                        case z_Waker::RESOURCE:
-                            // try again
-                            assert(!z_waiter()->linked());
+                    switch (z_event()) {
+                        case z_Event::WAITER:
                             continue;
-                        case z_Waker::CANCEL:
+                        case z_Event::TIMER:
+                        case z_Event::CANCEL:
                             channel->del_read_w(z_waiter());
-                            res = -ECANCELED;
+                            res = (z_event() == z_Event::TIMER) ? -ETIMEDOUT : -ECANCELED;
                             goto out;
                         default:
                             std::unreachable();
                     }
-                } else {
-                    goto out;
                 }
             }
             out:
+            z_timer_disarm();
             z_return(res);
         }
     };
 
     struct z_write {
         z_leaf_fields();
-
         z_deinit(z_write) {}
-
-        z_function(int, z_Channel *channel, T item) {
+        z_function(int, z_Channel *channel, T item, int timeout = 0) {
             z_begin();
+            z_timer_arm(timeout);
             int res;
             for (;;) {
                 res = channel->write(item);
-                if (res == 0) {
-                    break;
-                } else if (res == -EAGAIN) {
+                if (res != -EAGAIN) {
+                    goto out;
+                } else {
                     channel->add_write_w(z_waiter());
                     z_yield();
-                    switch (z_waker()) {
-                        case z_Waker::RESOURCE:
-                            // try again
-                            assert(!z_waiter()->linked());
+                    switch (z_event()) {
+                        case z_Event::WAITER:
                             continue;
-                        case z_Waker::CANCEL:
+                        case z_Event::TIMER:
+                        case z_Event::CANCEL:
                             channel->del_write_w(z_waiter());
-                            res = -ECANCELED;
+                            res = (z_event() == z_Event::TIMER) ? -ETIMEDOUT : -ECANCELED;
                             goto out;
                         default:
                             std::unreachable();
                     }
-                } else {
-                    goto out;
                 }
             }
             out:
+            z_timer_disarm();
             z_return(res);
         }
     };
@@ -140,7 +134,7 @@ public:
         while (has_data() || _closed) {
             auto *w = _read_wq.pop_head();
             if (!w) break;
-            w->callback(w, z_Waker::RESOURCE, this);
+            w->callback(w, this);
         }
     }
 
@@ -148,7 +142,7 @@ public:
         while (has_space() || _closed) {
             auto *w = _write_wq.pop_head();
             if (!w) break;
-            w->callback(w, z_Waker::RESOURCE, this);
+            w->callback(w, this);
         }
     }
 

@@ -1,17 +1,8 @@
 #pragma once
-#include <cstdint>
 #include "z_list.hpp"
 
-enum class z_Waker : uint8_t {
-    RESOURCE, // trigger by resource (ready/error)
-    TIMER, // trigger by timer (sleep or timeout)
-    CANCEL, // trigger by task->cancel()
-    _START, // start the task (internal)
-    _NULL, // no waker (sentinel)
-};
-
 struct z_Waiter {
-    using Callback = void (*)(z_Waiter *w, z_Waker waker, void *payload) noexcept;
+    using Callback = void (*)(z_Waiter *waiter, void *data) noexcept;
 
     z_Node node{};
     Callback callback = nullptr;
