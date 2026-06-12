@@ -1,7 +1,9 @@
 #include "z_fd.hpp"
+#include <asm-generic/errno.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <errno.h>
+#include <fcntl.h>
 #include "z_env.hpp"
 
 static_assert(EAGAIN == EWOULDBLOCK);
@@ -61,11 +63,11 @@ void z_Fd::on_event(bool ev_data, bool ev_space) noexcept {
 }
 
 namespace {
-    void on_error(auto *__restrict progress, int set_errno = 0) noexcept {
-        if (*progress == 0) {
+    void on_error(auto *__restrict transferred, int set_errno = 0) noexcept {
+        if (*transferred == 0) {
             // no progress has been made
             if (set_errno) errno = set_errno;
-            *progress = -1;
+            *transferred = -1;
         }
     }
 }
@@ -473,4 +475,128 @@ z_function_def(z_Fd::z_connect, int, z_Fd *fd, const z_net::Addr *addr, Opt opt)
     out:
     z_timer_disarm();
     z_return(res);
+}
+
+z_function_def(z_Fd::z_forward, int, z_Fd *a_fd, z_Fd *b_fd, int a_pipe, int b_pipe, Opt opt) {
+    z_begin();
+
+    task = z_current();
+    int res;
+
+    #define forward_a2b() do { \
+        if (!do_forward(z_waiter(), a_fd, b_fd, a_pipe, a_len, a_eof, opt.flags)) [[unlikely]] { \
+            /* errno has been set */ \
+            res = -1; \
+            goto out; \
+        } \
+    } while (0)
+
+    #define forward_b2a() do { \
+        if (!do_forward(&waiter, b_fd, a_fd, b_pipe, b_len, b_eof, opt.flags)) [[unlikely]] { \
+            /* errno has been set */ \
+            res = -1; \
+            goto out; \
+        } \
+    } while (0)
+
+    forward_a2b();
+    forward_b2a();
+
+    while (!a_eof || !b_eof) {
+        // re-arm timer
+        if (opt.idle_timeout > 0 || opt.half_timeout > 0) {
+            // todo: half timer can only be armed once
+            int timeout = (!a_eof && !b_eof) ? opt.idle_timeout : opt.half_timeout;
+            z_timer_disarm();
+            z_timer_arm(timeout);
+        }
+
+        // wait for events
+        z_yield();
+        switch (z_event()) {
+            case z_Event::WAITER: {
+                auto *ctx = z_event_ctx();
+                if (ctx->u.waiter == z_waiter())
+                    forward_a2b();
+                else
+                    forward_b2a();
+                continue;
+            }
+            case z_Event::TIMER:
+            case z_Event::CANCEL:
+                errno = (z_event() == z_Event::TIMER) ? ETIMEDOUT : ECANCELED;
+                res = -1;
+                goto out;
+            default:
+                std::unreachable();
+        }
+    }
+    assert(a_eof && b_eof);
+    res = 0;
+
+    #undef forward_a2b
+    #undef forward_b2a
+
+    out:
+    // a->b
+    a_fd->del_read_w(z_waiter());
+    b_fd->del_write_w(z_waiter());
+
+    // b->a
+    b_fd->del_read_w(&waiter);
+    a_fd->del_write_w(&waiter);
+
+    z_timer_disarm();
+    z_return(res);
+}
+
+bool z_Fd::z_forward::do_forward(
+    z_Waiter *w, z_Fd *in, z_Fd *out,
+    int pipe, size_t &len, bool &eof,
+    unsigned flags) noexcept
+{
+    constexpr size_t splice_sz = 1048576; // 1MB
+
+    for (;;) {
+        // in_fd -> pipe
+        if (len == 0) {
+            ssize_t n = splice(in->raw_fd, nullptr, pipe, nullptr, splice_sz, flags);
+            if (n > 0) {
+                len = n;
+            } else if (n == 0) {
+                // EOF
+                out->shutdown(SHUT_WR);
+                eof = true;
+                return true;
+            } else if (errno == EAGAIN) {
+                in->has_data = false;
+                in->add_read_w(w);
+                return true;
+            } else {
+                // error
+                return false;
+            }
+        }
+
+        // pipe -> out_fd
+        while (len > 0) {
+            ssize_t n = splice(pipe, nullptr, out->raw_fd, nullptr, len, flags);
+            if (n > 0) {
+                len -= (size_t)n;
+            } else if (n == 0) {
+                // avoid infinite loop
+                errno = EDEADLOCK;
+                return false;
+            } else if (errno == EAGAIN) {
+                out->has_space = false;
+                out->add_write_w(w);
+                return true;
+            } else {
+                // error
+                return false;
+            }
+        }
+    }
+
+    std::unreachable();
 }

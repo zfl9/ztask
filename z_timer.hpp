@@ -14,6 +14,10 @@ struct z_Timer {
 
     explicit z_Timer(Callback callback, uint64_t expire) noexcept
         : callback{callback}, expire{expire} {}
+
+    bool linked() const noexcept {
+        return node.linked();
+    }
 };
 
 using z_TimerList = z_List<z_Timer, &z_Timer::node>;

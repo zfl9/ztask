@@ -132,4 +132,32 @@ public:
             return z_function_call(fd, &addr, opt);
         }
     };
+
+    // for byte-stream && use splice to zero-copy
+    struct z_forward {
+        z_leaf_fields();
+        bool a_eof = false;
+        bool b_eof = false;
+        z_Waiter waiter{waiter_cb};
+        z_Task *task = nullptr;
+        size_t a_len = 0;
+        size_t b_len = 0;
+
+        z_deinit(z_forward) {}
+
+        struct Opt { unsigned flags; int idle_timeout; int half_timeout; };
+        z_function(int, z_Fd *a_fd, z_Fd *b_fd, int a_pipe, int b_pipe, Opt opt = {});
+
+        static void waiter_cb(z_Waiter *waiter, void *data) noexcept {
+            z_forward *f = z_container_of<&z_forward::waiter>(waiter);
+            z_EventCtx event_ctx{
+                .u = {.waiter = waiter},
+                .data = data,
+            };
+            return f->task->resume(z_Event::WAITER, &event_ctx);
+        }
+
+        static bool do_forward(z_Waiter *w, z_Fd *in, z_Fd *out,
+            int pipe, size_t &len, bool &eof, unsigned flags) noexcept;
+    };
 };
