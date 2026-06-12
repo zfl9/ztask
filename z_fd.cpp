@@ -258,7 +258,7 @@ z_function_def(z_Fd::z_send, ssize_t, z_Fd *fd, const void *buf, size_t len, Opt
     };
     msghdr msg{
         .msg_name = (void *)(opt.addr ? &opt.addr->sa : nullptr),
-        .msg_namelen = (socklen_t)(opt.addr ? sizeof(*opt.addr) : 0),
+        .msg_namelen = opt.addr ? opt.addr->len() : 0,
         .msg_iov = &iov,
         .msg_iovlen = 1,
         .msg_control = nullptr,
