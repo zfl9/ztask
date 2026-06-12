@@ -1,8 +1,10 @@
 #include "z_net.hpp"
 #include <cassert>
-#include <sys/socket.h>
+#include <signal.h>
+#include <errno.h>
+#include <string.h>
 #include <unistd.h>
-#include <fcntl.h>
+#include <sys/socket.h>
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
 
@@ -30,6 +32,14 @@ void z_net::Addr::tostring(char ip[INET6_ADDRSTRLEN], uint16_t *port) const noex
         inet_ntop(AF_INET6, &sin6.sin6_addr, ip, INET6_ADDRSTRLEN);
         *port = ntohs(sin6.sin6_port);
     }
+}
+
+void z_net::ignore_sigpipe() noexcept {
+    struct sigaction sa{};
+    sa.sa_handler = SIG_IGN;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGPIPE, &sa, nullptr);
 }
 
 int z_net::ip_family(const char *ip) noexcept {
@@ -101,4 +111,143 @@ ssize_t z_net::sendto(int fd, const void *buf, size_t len, const Addr *addr, int
     const struct sockaddr *raw_addr = addr ? &addr->sa : nullptr;
     socklen_t raw_addrlen = addr ? addr->len() : 0;
     return ::sendto(fd, buf, len, flags, raw_addr, raw_addrlen);
+}
+
+namespace {
+    struct iov_slice_result {
+        const iovec *iov;
+        int iovcnt;
+    };
+
+    iov_slice_result iov_slice(iovec *tmp_iov, int tmp_iovmax,
+        const iovec *raw_iov, int raw_iovcnt,
+        size_t skip_bytes) noexcept
+    {
+        int skip_iovcnt = 0;
+        while (skip_iovcnt < raw_iovcnt) {
+            if (skip_bytes >= raw_iov[skip_iovcnt].iov_len) {
+                skip_bytes -= raw_iov[skip_iovcnt].iov_len;
+                ++skip_iovcnt;
+            } else {
+                break;
+            }
+        }
+
+        if (skip_bytes == 0) {
+            return {
+                .iov = raw_iov + skip_iovcnt, 
+                .iovcnt = raw_iovcnt - skip_iovcnt,
+            };
+        } else {
+            int remain_iovcnt = raw_iovcnt - skip_iovcnt;
+            if (remain_iovcnt <= 0 || remain_iovcnt > tmp_iovmax) [[unlikely]] {
+                errno = EINVAL;
+                return {}; // null
+            }
+
+            tmp_iov[0] = {
+                .iov_base = (char *)raw_iov[skip_iovcnt].iov_base + skip_bytes,
+                .iov_len = raw_iov[skip_iovcnt].iov_len - skip_bytes,
+            };
+            if (remain_iovcnt > 1) {
+                memcpy(&tmp_iov[1], &raw_iov[skip_iovcnt + 1], (remain_iovcnt - 1) * sizeof(iovec));
+            }
+            return {
+                .iov = tmp_iov,
+                .iovcnt = remain_iovcnt,
+            };
+        }
+    }
+}
+
+ssize_t z_net::readv(int fd, const iovec *raw_iov, int raw_iovcnt, size_t skip_bytes) noexcept {
+    if (skip_bytes == 0) {
+        return ::readv(fd, raw_iov, raw_iovcnt);
+    } else {
+        constexpr int tmp_iovmax = 32;
+        iovec tmp_iov[tmp_iovmax];
+
+        auto [iov, iovcnt] = iov_slice(tmp_iov, tmp_iovmax, raw_iov, raw_iovcnt, skip_bytes);
+        if (!iov) [[unlikely]] {
+            // errno has been set
+            return -1;
+        }
+        return ::readv(fd, iov, iovcnt);
+    }
+}
+
+ssize_t z_net::writev(int fd, const iovec *raw_iov, int raw_iovcnt, size_t skip_bytes) noexcept {
+    if (skip_bytes == 0) {
+        return ::writev(fd, raw_iov, raw_iovcnt);
+    } else {
+        constexpr int tmp_iovmax = 32;
+        iovec tmp_iov[tmp_iovmax];
+
+        auto [iov, iovcnt] = iov_slice(tmp_iov, tmp_iovmax, raw_iov, raw_iovcnt, skip_bytes);
+        if (!iov) [[unlikely]] {
+            // errno has been set
+            return -1;
+        }
+        return ::writev(fd, iov, iovcnt);
+    }
+}
+
+ssize_t z_net::recvmsg(int fd, msghdr *raw_msg, int flags, size_t skip_bytes) noexcept {
+    if (skip_bytes == 0) {
+        return ::recvmsg(fd, raw_msg, flags);
+    } else {
+        constexpr int tmp_iovmax = 32;
+        iovec tmp_iov[tmp_iovmax];
+
+        auto [iov, iovcnt] = iov_slice(tmp_iov, tmp_iovmax, raw_msg->msg_iov, raw_msg->msg_iovlen, skip_bytes);
+        if (!iov) [[unlikely]] {
+            // errno has been set
+            return -1;
+        }
+
+        msghdr tmp_msg{
+            .msg_name = raw_msg->msg_name,
+            .msg_namelen = raw_msg->msg_namelen,
+            .msg_iov = (iovec *)iov,
+            .msg_iovlen = (size_t)iovcnt,
+            .msg_control = raw_msg->msg_control,
+            .msg_controllen = raw_msg->msg_controllen,
+            .msg_flags = raw_msg->msg_flags,
+        };
+
+        ssize_t res = ::recvmsg(fd, &tmp_msg, flags);
+        if (res >= 0) {
+            // sync back to original msghdr
+            raw_msg->msg_namelen = tmp_msg.msg_namelen;
+            raw_msg->msg_controllen = tmp_msg.msg_controllen;
+            raw_msg->msg_flags = tmp_msg.msg_flags;
+        }
+        return res;
+    }
+}
+
+ssize_t z_net::sendmsg(int fd, const msghdr *raw_msg, int flags, size_t skip_bytes) noexcept {
+    if (skip_bytes == 0) {
+        return ::sendmsg(fd, raw_msg, flags);
+    } else {
+        constexpr int tmp_iovmax = 32;
+        iovec tmp_iov[tmp_iovmax];
+
+        auto [iov, iovcnt] = iov_slice(tmp_iov, tmp_iovmax, raw_msg->msg_iov, raw_msg->msg_iovlen, skip_bytes);
+        if (!iov) [[unlikely]] {
+            // errno has been set
+            return -1;
+        }
+
+        msghdr tmp_msg{
+            .msg_name = raw_msg->msg_name,
+            .msg_namelen = raw_msg->msg_namelen,
+            .msg_iov = (iovec *)iov,
+            .msg_iovlen = (size_t)iovcnt,
+            .msg_control = raw_msg->msg_control,
+            .msg_controllen = raw_msg->msg_controllen,
+            .msg_flags = raw_msg->msg_flags,
+        };
+        return ::sendmsg(fd, &tmp_msg, flags);
+    }
 }

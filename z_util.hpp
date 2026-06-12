@@ -1,6 +1,5 @@
 #pragma once
 #include <cstddef>
-#include <csignal>
 #include <concepts>
 #include <type_traits>
 
@@ -46,12 +45,4 @@ const auto *z_container_of(const Field *p) noexcept {
     static_assert(std::is_same_v<std::remove_cv_t<Field>, ExpectedField>);
     size_t offset = reinterpret_cast<size_t>(&(static_cast<const Container *>(nullptr)->*field_name));
     return reinterpret_cast<const Container *>(reinterpret_cast<const char *>(p) - offset);
-}
-
-inline void z_ignore_sigpipe() noexcept {
-    struct sigaction sa{};
-    sa.sa_handler = SIG_IGN;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0;
-    sigaction(SIGPIPE, &sa, nullptr);
 }

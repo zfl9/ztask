@@ -91,6 +91,7 @@ public:
     // for datagram
     struct z_sendmmsg {
         z_leaf_fields();
+        int n_sent = 0;
         z_deinit(z_sendmmsg) {}
         struct Opt { int flags; int timeout; };
         z_function(int, z_Fd *fd, mmsghdr *msgv, unsigned vlen, Opt opt = {});

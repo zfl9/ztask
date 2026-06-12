@@ -1,8 +1,8 @@
 #pragma once
 #include <cstdint>
 #include <sys/socket.h>
+#include <sys/uio.h>
 #include <netinet/in.h>
-#include <sys/un.h>
 
 struct z_net {
     z_net() = delete;
@@ -20,6 +20,8 @@ struct z_net {
         void tostring(char ip[INET6_ADDRSTRLEN], uint16_t *port) const noexcept;
     };
 
+    static void ignore_sigpipe() noexcept;
+
     // AF_INET, AF_INET6, -1(error)
     static int ip_family(const char *ip) noexcept;
 
@@ -36,6 +38,13 @@ struct z_net {
 
     static int accept(int fd, Addr *addr) noexcept;
     static int connect(int fd, const Addr *addr) noexcept;
+
     static ssize_t recvfrom(int fd, void *buf, size_t len, Addr *addr, int flags = 0) noexcept;
     static ssize_t sendto(int fd, const void *buf, size_t len, const Addr *addr, int flags = 0) noexcept;
+
+    static ssize_t readv(int fd, const iovec *iov, int iovcnt, size_t skip_bytes = 0) noexcept;
+    static ssize_t writev(int fd, const iovec *iov, int iovcnt, size_t skip_bytes = 0) noexcept;
+
+    static ssize_t recvmsg(int fd, msghdr *msg, int flags = 0, size_t skip_bytes = 0) noexcept;
+    static ssize_t sendmsg(int fd, const msghdr *msg, int flags = 0, size_t skip_bytes = 0) noexcept;
 };

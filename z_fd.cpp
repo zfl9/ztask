@@ -4,6 +4,8 @@
 #include <errno.h>
 #include "z_env.hpp"
 
+static_assert(EAGAIN == EWOULDBLOCK);
+
 void z_Fd::close() noexcept {
     if (raw_fd >= 0) {
         z_env::on_fd_close(this);
@@ -59,54 +61,11 @@ void z_Fd::on_event(bool ev_data, bool ev_space) noexcept {
 }
 
 namespace {
-    struct iov_slice_result {
-        const iovec *iov;
-        int iovcnt;
-    };
-
-    iov_slice_result iov_slice(iovec *tmp_iov, int tmp_iovmax,
-        const iovec *user_iov, int user_iovcnt,
-        size_t skip_bytes) noexcept
-    {
-        int skip_iovcnt = 0;
-        while (skip_iovcnt < user_iovcnt) {
-            if (skip_bytes >= user_iov[skip_iovcnt].iov_len) {
-                skip_bytes -= user_iov[skip_iovcnt].iov_len;
-                ++skip_iovcnt;
-            } else {
-                break;
-            }
-        }
-
-        if (skip_bytes == 0) {
-            return {
-                .iov = user_iov + skip_iovcnt, 
-                .iovcnt = user_iovcnt - skip_iovcnt,
-            };
-        } else {
-            int iovcnt = user_iovcnt - skip_iovcnt;
-            if (iovcnt > tmp_iovmax) [[unlikely]] {
-                errno = EINVAL;
-                return {}; // null
-            }
-
-            tmp_iov[0] = {
-                .iov_base = (char *)user_iov[skip_iovcnt].iov_base + skip_bytes,
-                .iov_len = user_iov[skip_iovcnt].iov_len - skip_bytes,
-            };
-            memcpy(&tmp_iov[1], &user_iov[skip_iovcnt + 1], (iovcnt - 1) * sizeof(iovec));
-
-            return {
-                .iov = tmp_iov,
-                .iovcnt = iovcnt,
-            };
-        }
-    }
-
-    void on_error(ssize_t *__restrict n_bytes, int set_errno = 0) {
-        if (*n_bytes <= 0) {
+    void on_error(auto *__restrict progress, int set_errno = 0) noexcept {
+        if (*progress == 0) {
+            // no progress has been made
             if (set_errno) errno = set_errno;
-            *n_bytes = -1;
+            *progress = -1;
         }
     }
 }
@@ -119,11 +78,11 @@ z_function_def(z_Fd::z_read, ssize_t, z_Fd *fd, void *buf, size_t len, Opt opt) 
     return z_function_call(fd, &iov, 1, opt);
 }
 
-z_function_def(z_Fd::z_read, ssize_t, z_Fd *fd, const iovec *user_iov, int user_iovcnt, Opt opt) {
+z_function_def(z_Fd::z_read, ssize_t, z_Fd *fd, const iovec *iov, int iovcnt, Opt opt) {
     // parameter preprocessing
     size_t buf_len = 0;
-    for (int i = 0; i < user_iovcnt; ++i)
-        buf_len += user_iov[i].iov_len;
+    for (int i = 0; i < iovcnt; ++i)
+        buf_len += iov[i].iov_len;
 
     if (opt.at_least < 1) opt.at_least = 1;
     if (opt.at_least > buf_len) opt.at_least = buf_len;
@@ -133,19 +92,7 @@ z_function_def(z_Fd::z_read, ssize_t, z_Fd *fd, const iovec *user_iov, int user_
     z_timer_arm(opt.timeout);
 
     while ((size_t)n_read < opt.at_least) {
-        ssize_t res;
-        {
-            constexpr int tmp_iovmax = 32;
-            iovec tmp_iov[tmp_iovmax];
-
-            auto [iov, iovcnt] = iov_slice(tmp_iov, tmp_iovmax, user_iov, user_iovcnt, n_read);
-            if (!iov) [[unlikely]] {
-                on_error(&n_read);
-                goto out;
-            }
-            res = ::readv(fd->raw_fd, iov, iovcnt);
-        }
-
+        ssize_t res; res = z_net::readv(fd->raw_fd, iov, iovcnt, n_read);
         if (res > 0) {
             n_read += res;
         } else if (res == 0) {
@@ -190,28 +137,16 @@ z_function_def(z_Fd::z_write, ssize_t, z_Fd *fd, const void *buf, size_t len, Op
     return z_function_call(fd, &iov, 1, opt);
 }
 
-z_function_def(z_Fd::z_write, ssize_t, z_Fd *fd, const iovec *user_iov, int user_iovcnt, Opt opt) {
+z_function_def(z_Fd::z_write, ssize_t, z_Fd *fd, const iovec *iov, int iovcnt, Opt opt) {
     size_t data_len = 0;
-    for (int i = 0; i < user_iovcnt; ++i)
-        data_len += user_iov[i].iov_len;
+    for (int i = 0; i < iovcnt; ++i)
+        data_len += iov[i].iov_len;
 
     z_begin();
     z_timer_arm(opt.timeout);
 
     while ((size_t)n_write < data_len) {
-        ssize_t res;
-        {
-            constexpr int tmp_iovmax = 32;
-            iovec tmp_iov[tmp_iovmax];
-
-            auto [iov, iovcnt] = iov_slice(tmp_iov, tmp_iovmax, user_iov, user_iovcnt, n_write);
-            if (!iov) [[unlikely]] {
-                on_error(&n_write);
-                goto out;
-            }
-            res = ::writev(fd->raw_fd, iov, iovcnt);
-        }
-
+        ssize_t res; res = z_net::writev(fd->raw_fd, iov, iovcnt, n_write);
         if (res > 0) {
             n_write += res;
         } else if (res == 0) {
@@ -279,35 +214,7 @@ z_function_def(z_Fd::z_recv, ssize_t, z_Fd *fd, msghdr *msg, Opt opt) {
     z_timer_arm(opt.timeout);
 
     while ((size_t)n_read < opt.at_least || buf_len == 0) {
-        ssize_t res;
-        {
-            constexpr int tmp_iovmax = 32;
-            iovec tmp_iov[tmp_iovmax];
-
-            auto [iov, iovcnt] = iov_slice(tmp_iov, tmp_iovmax, msg->msg_iov, msg->msg_iovlen, n_read);
-            if (!iov) [[unlikely]] {
-                on_error(&n_read);
-                goto out;
-            }
-
-            msghdr tmp_msg{
-                .msg_name = msg->msg_name,
-                .msg_namelen = msg->msg_namelen,
-                .msg_iov = (iovec *)iov,
-                .msg_iovlen = (size_t)iovcnt,
-                .msg_control = msg->msg_control,
-                .msg_controllen = msg->msg_controllen,
-                .msg_flags = msg->msg_flags,
-            };
-            res = ::recvmsg(fd->raw_fd, &tmp_msg, opt.flags);
-            if (res >= 0) {
-                // sync back to original msghdr
-                msg->msg_namelen = tmp_msg.msg_namelen;
-                msg->msg_controllen = tmp_msg.msg_controllen;
-                msg->msg_flags = tmp_msg.msg_flags;
-            }
-        }
-
+        ssize_t res; res = z_net::recvmsg(fd->raw_fd, msg, opt.flags, n_read);
         if (res > 0) {
             n_read += res;
         } else if (res == 0) {
@@ -370,29 +277,7 @@ z_function_def(z_Fd::z_send, ssize_t, z_Fd *fd, const msghdr *msg, Opt opt) {
     z_timer_arm(opt.timeout);
 
     while ((size_t)n_write < data_len || data_len == 0) {
-        ssize_t res;
-        {
-            constexpr int tmp_iovmax = 32;
-            iovec tmp_iov[tmp_iovmax];
-
-            auto [iov, iovcnt] = iov_slice(tmp_iov, tmp_iovmax, msg->msg_iov, msg->msg_iovlen, n_write);
-            if (!iov) [[unlikely]] {
-                on_error(&n_write);
-                goto out;
-            }
-
-            msghdr tmp_msg{
-                .msg_name = msg->msg_name,
-                .msg_namelen = msg->msg_namelen,
-                .msg_iov = (iovec *)iov,
-                .msg_iovlen = (size_t)iovcnt,
-                .msg_control = msg->msg_control,
-                .msg_controllen = msg->msg_controllen,
-                .msg_flags = msg->msg_flags,
-            };
-            res = ::sendmsg(fd->raw_fd, &tmp_msg, opt.flags);
-        }
-
+        ssize_t res; res = z_net::sendmsg(fd->raw_fd, msg, opt.flags, n_write);
         if (res > 0) {
             n_write += res;
         } else if (res == 0) {
@@ -429,6 +314,86 @@ z_function_def(z_Fd::z_send, ssize_t, z_Fd *fd, const msghdr *msg, Opt opt) {
     z_return(n_write);
 }
 
+z_function_def(z_Fd::z_recvmmsg, int, z_Fd *fd, mmsghdr *msgv, unsigned vlen, Opt opt) {
+    z_begin();
+    z_timer_arm(opt.timeout);
+
+    int n_msg;
+    for (;;) {
+        n_msg = ::recvmmsg(fd->raw_fd, msgv, vlen, opt.flags, nullptr);
+        if (n_msg >= 0 || errno != EAGAIN) {
+            goto out;
+        } else {
+            fd->has_data = false;
+            fd->add_read_w(z_waiter());
+            z_yield();
+            switch (z_event()) {
+                case z_Event::WAITER:
+                    if (fd->is_closed()) [[unlikely]] {
+                        errno = ESHUTDOWN;
+                        n_msg = -1;
+                        goto out;
+                    }
+                    continue;
+                case z_Event::TIMER:
+                case z_Event::CANCEL:
+                    fd->del_read_w(z_waiter());
+                    errno = (z_event() == z_Event::TIMER) ? ETIMEDOUT : ECANCELED;
+                    n_msg = -1;
+                    goto out;
+                default:
+                    std::unreachable();
+            }
+        }
+    }
+
+    out:
+    z_timer_disarm();
+    z_return(n_msg);
+}
+
+z_function_def(z_Fd::z_sendmmsg, int, z_Fd *fd, mmsghdr *msgv, unsigned vlen, Opt opt) {
+    z_begin();
+    z_timer_arm(opt.timeout);
+
+    while ((unsigned)n_sent < vlen) {
+        int res; res = ::sendmmsg(fd->raw_fd, msgv + n_sent, vlen - n_sent, opt.flags);
+        if (res > 0) {
+            n_sent += res;
+        } else if (res == 0) {
+            // avoid infinite loop
+            goto out;
+        } else if (errno == EAGAIN) {
+            fd->has_space = false;
+            fd->add_write_w(z_waiter());
+            z_yield();
+            switch (z_event()) {
+                case z_Event::WAITER:
+                    if (fd->is_closed()) [[unlikely]] {
+                        on_error(&n_sent, ESHUTDOWN);
+                        goto out;
+                    }
+                    continue;
+                case z_Event::TIMER:
+                case z_Event::CANCEL:
+                    fd->del_write_w(z_waiter());
+                    on_error(&n_sent, (z_event() == z_Event::TIMER) ? ETIMEDOUT : ECANCELED);
+                    goto out;
+                default:
+                    std::unreachable();
+            }
+        } else {
+            // error
+            on_error(&n_sent);
+            goto out;
+        }
+    }
+
+    out:
+    z_timer_disarm();
+    z_return(n_sent);
+}
+
 z_function_def(z_Fd::z_accept, int, z_Fd *fd, z_net::Addr *addr, Opt opt) {
     z_begin();
     z_timer_arm(opt.timeout);
@@ -436,9 +401,9 @@ z_function_def(z_Fd::z_accept, int, z_Fd *fd, z_net::Addr *addr, Opt opt) {
     int new_fd;
     for (;;) {
         new_fd = z_net::accept(fd->raw_fd, addr);
-        if (new_fd >= 0) {
-            break;
-        } else if (errno == EAGAIN) {
+        if (new_fd >= 0 || errno != EAGAIN) {
+            goto out;
+        } else {
             fd->has_data = false;
             fd->add_read_w(z_waiter());
             z_yield();
@@ -450,17 +415,15 @@ z_function_def(z_Fd::z_accept, int, z_Fd *fd, z_net::Addr *addr, Opt opt) {
                         goto out;
                     }
                     continue;
+                case z_Event::TIMER:
                 case z_Event::CANCEL:
                     fd->del_read_w(z_waiter());
-                    errno = ECANCELED;
+                    errno = (z_event() == z_Event::TIMER) ? ETIMEDOUT : ECANCELED;
                     new_fd = -1;
                     goto out;
                 default:
                     std::unreachable();
             }
-        } else {
-            // error
-            goto out;
         }
     }
 
@@ -474,7 +437,7 @@ z_function_def(z_Fd::z_connect, int, z_Fd *fd, const z_net::Addr *addr, Opt opt)
     z_timer_arm(opt.timeout);
 
     int res; res = z_net::connect(fd->raw_fd, addr);
-    if (res == 0 || errno != EINPROGRESS) [[unlikely]]
+    if (res == 0 || errno != EINPROGRESS)
         goto out;
 
     fd->has_space = false;
@@ -497,9 +460,10 @@ z_function_def(z_Fd::z_connect, int, z_Fd *fd, const z_net::Addr *addr, Opt opt)
                 res = 0;
             }
             goto out;
+        case z_Event::TIMER:
         case z_Event::CANCEL:
             fd->del_write_w(z_waiter());
-            errno = ECANCELED;
+            errno = (z_event() == z_Event::TIMER) ? ETIMEDOUT : ECANCELED;
             res = -1;
             goto out;
         default:
