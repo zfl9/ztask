@@ -256,7 +256,7 @@ concept z_result_is_void = std::is_void_v<std::remove_pointer_t<std::remove_cvre
 #define z_ignore_result() (nullptr)
 
 // @param result: `Result *`, use `z_ignore_result()` to ignore
-// @param args: the arguments passed to z_function (pinned)
+// @param args: the arguments passed to z_function, replayed when task->resume()
 #define z_call(taskname, result, args...) do { \
     using z_SubTask = decltype(this->_z_subtask_u.taskname); \
     ::new (static_cast<void *>(&this->_z_subtask_u.taskname)) z_SubTask{}; \
