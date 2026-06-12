@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <array>
 #include <sys/uio.h>
 #include <sys/socket.h>
 #include "z_ref.hpp"
@@ -48,6 +49,9 @@ public:
         struct Opt { size_t at_least; int timeout; };
         z_function(ssize_t, z_Fd *fd, void *buf, size_t len, Opt opt = {});
         z_function(ssize_t, z_Fd *fd, const iovec *iov, int iovcnt, Opt opt = {});
+        template<size_t N> z_function(ssize_t, z_Fd *fd, std::array<iovec, N> &&iov, Opt opt = {}) {
+            return z_function_call(fd, &iov[0], (int)N, opt);
+        }
     };
 
     // for byte-stream
@@ -58,6 +62,9 @@ public:
         struct Opt { int timeout; };
         z_function(ssize_t, z_Fd *fd, const void *buf, size_t len, Opt opt = {});
         z_function(ssize_t, z_Fd *fd, const iovec *iov, int iovcnt, Opt opt = {});
+        template<size_t N> z_function(ssize_t, z_Fd *fd, std::array<iovec, N> &&iov, Opt opt = {}) {
+            return z_function_call(fd, &iov[0], (int)N, opt);
+        }
     };
 
     // for byte-stream or datagram
@@ -68,6 +75,9 @@ public:
         struct Opt { size_t at_least; z_net::Addr *addr; int flags; int timeout; };
         z_function(ssize_t, z_Fd *fd, void *buf, size_t len, Opt opt = {});
         z_function(ssize_t, z_Fd *fd, msghdr *msg, Opt opt = {});
+        z_function(ssize_t, z_Fd *fd, msghdr &&msg, Opt opt = {}) {
+            return z_function_call(fd, &msg, opt);
+        }
     };
 
     // for byte-stream or datagram
@@ -78,6 +88,9 @@ public:
         struct Opt { const z_net::Addr *addr; int flags; int timeout; };
         z_function(ssize_t, z_Fd *fd, const void *buf, size_t len, Opt opt = {});
         z_function(ssize_t, z_Fd *fd, const msghdr *msg, Opt opt = {});
+        z_function(ssize_t, z_Fd *fd, msghdr &&msg, Opt opt = {}) {
+            return z_function_call(fd, &msg, opt);
+        }
     };
 
     // for datagram
@@ -86,6 +99,9 @@ public:
         z_deinit(z_recvmmsg) {}
         struct Opt { int flags; int timeout; };
         z_function(int, z_Fd *fd, mmsghdr *msgv, unsigned vlen, Opt opt = {});
+        template<size_t N> z_function(int, z_Fd *fd, std::array<mmsghdr, N> &&msgv, Opt opt = {}) {
+            return z_function_call(fd, &msgv[0], (unsigned)N, opt);
+        }
     };
 
     // for datagram
@@ -95,6 +111,9 @@ public:
         z_deinit(z_sendmmsg) {}
         struct Opt { int flags; int timeout; };
         z_function(int, z_Fd *fd, mmsghdr *msgv, unsigned vlen, Opt opt = {});
+        template<size_t N> z_function(int, z_Fd *fd, std::array<mmsghdr, N> &&msgv, Opt opt = {}) {
+            return z_function_call(fd, &msgv[0], (unsigned)N, opt);
+        }
     };
 
     struct z_accept {
@@ -109,5 +128,8 @@ public:
         z_deinit(z_connect) {}
         struct Opt { int timeout; };
         z_function(int, z_Fd *fd, const z_net::Addr *addr, Opt opt = {});
+        z_function(int, z_Fd *fd, z_net::Addr &&addr, Opt opt = {}) {
+            return z_function_call(fd, &addr, opt);
+        }
     };
 };
