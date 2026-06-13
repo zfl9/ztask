@@ -30,6 +30,8 @@ struct z_env {
 
     static void on_fd_dirty(z_Fd *fd) noexcept;
     static void on_fd_close(z_Fd *fd) noexcept;
+
+    static void run() noexcept;
 };
 
 // place it at the beginning of `main()` and `thread_main()`

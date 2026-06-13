@@ -104,27 +104,6 @@ namespace {
             wall_time = sys_wall_time();
             format_wall_timestr(wall_timestr.data(), wall_timestr.size(), wall_time);
         }
-
-        void add_timer(z_Timer *timer, uint64_t after_ms) noexcept {
-            timer->expire = tick_time + after_ms;
-            timer_mgr.add_timer(timer);
-        }
-
-        void add_timer(z_Timer *timer) noexcept {
-            timer_mgr.add_timer(timer);
-        }
-
-        void del_timer(z_Timer *timer) noexcept {
-            timer_mgr.del_timer(timer);
-        }
-
-        void on_fd_dirty(z_Fd *fd) noexcept {
-            epoll.on_fd_dirty(fd);
-        }
-
-        void on_fd_close(z_Fd *fd) noexcept {
-            epoll.on_fd_close(fd);
-        }
     };
 
     alignas(z_EnvImpl) __thread char z_env_impl_storage[sizeof(z_EnvImpl)] z_attr_tls_model;
@@ -169,21 +148,26 @@ z_Epoll *z_env::epoll() noexcept {
 }
 
 void z_env::add_timer(z_Timer *timer, uint64_t after_ms) noexcept {
-    return z_env_impl->add_timer(timer, after_ms);
+    timer->expire = z_env_impl->tick_time + after_ms;
+    return z_env_impl->timer_mgr.add_timer(timer);
 }
 
 void z_env::add_timer(z_Timer *timer) noexcept {
-    return z_env_impl->add_timer(timer);
+    return z_env_impl->timer_mgr.add_timer(timer);
 }
 
 void z_env::del_timer(z_Timer *timer) noexcept {
-    return z_env_impl->del_timer(timer);
+    return z_env_impl->timer_mgr.del_timer(timer);
 }
 
 void z_env::on_fd_dirty(z_Fd *fd) noexcept {
-    return z_env_impl->on_fd_dirty(fd);
+    return z_env_impl->epoll.on_fd_dirty(fd);
 }
 
 void z_env::on_fd_close(z_Fd *fd) noexcept {
-    return z_env_impl->on_fd_close(fd);
+    return z_env_impl->epoll.on_fd_close(fd);
+}
+
+void z_env::run() noexcept {
+    return z_env_impl->epoll.run();
 }
