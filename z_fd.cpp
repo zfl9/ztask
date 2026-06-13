@@ -54,6 +54,9 @@ void z_Fd::on_event(bool ev_data, bool ev_space) noexcept {
     if (ev_data) has_data = true;
     if (ev_space) has_space = true;
 
+    bool read_wq_empty = read_wq.is_empty();
+    bool write_wq_empty = write_wq.is_empty();
+
     while (has_data || is_closed()) {
         auto *w = read_wq.pop_head();
         if (!w) break;
@@ -63,6 +66,13 @@ void z_Fd::on_event(bool ev_data, bool ev_space) noexcept {
         auto *w = write_wq.pop_head();
         if (!w) break;
         w->callback(w, this);
+    }
+
+    // sync dirty state
+    if (!is_closed()) {
+        if (read_wq_empty != read_wq.is_empty() || write_wq_empty != write_wq.is_empty()) {
+            z_env::on_fd_dirty(this);
+        }
     }
 }
 
