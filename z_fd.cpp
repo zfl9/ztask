@@ -26,24 +26,28 @@ void z_Fd::close() noexcept {
 
 void z_Fd::add_read_w(z_Waiter *w) noexcept {
     assert(!has_data && !is_closed());
+    bool pre_empty = read_wq.is_empty();
     read_wq.push_tail(w);
-    z_env::on_fd_dirty(this);
+    if (pre_empty) z_env::on_fd_dirty(this);
 }
 
 void z_Fd::add_write_w(z_Waiter *w) noexcept {
     assert(!has_space && !is_closed());
+    bool pre_empty = write_wq.is_empty();
     write_wq.push_tail(w);
-    z_env::on_fd_dirty(this);
+    if (pre_empty) z_env::on_fd_dirty(this);
 }
 
 void z_Fd::del_read_w(z_Waiter *w) noexcept {
-    w->unlink();
-    z_env::on_fd_dirty(this);
+    if (read_wq.is_empty()) return;
+    w->unlink(); // pop from read_wq
+    if (read_wq.is_empty() && !is_closed()) z_env::on_fd_dirty(this);
 }
 
 void z_Fd::del_write_w(z_Waiter *w) noexcept {
-    w->unlink();
-    z_env::on_fd_dirty(this);
+    if (write_wq.is_empty()) return;
+    w->unlink(); // pop from write_wq
+    if (write_wq.is_empty() && !is_closed()) z_env::on_fd_dirty(this);
 }
 
 void z_Fd::on_event(bool ev_data, bool ev_space) noexcept {
@@ -484,7 +488,7 @@ z_function_def(z_Fd::z_forward, int, z_Fd *a_fd, z_Fd *b_fd, int a_pipe, int b_p
     int res;
 
     #define forward_a2b() do { \
-        if (!do_forward(z_waiter(), a_fd, b_fd, a_pipe, a_len, a_eof, opt.flags)) [[unlikely]] { \
+        if (!do_forward(z_waiter(), a_fd, b_fd, a_pipe, a_len, a_shutdown, opt.flags)) [[unlikely]] { \
             /* errno has been set */ \
             res = -1; \
             goto out; \
@@ -492,7 +496,7 @@ z_function_def(z_Fd::z_forward, int, z_Fd *a_fd, z_Fd *b_fd, int a_pipe, int b_p
     } while (0)
 
     #define forward_b2a() do { \
-        if (!do_forward(&waiter, b_fd, a_fd, b_pipe, b_len, b_eof, opt.flags)) [[unlikely]] { \
+        if (!do_forward(&waiter, b_fd, a_fd, b_pipe, b_len, b_shutdown, opt.flags)) [[unlikely]] { \
             /* errno has been set */ \
             res = -1; \
             goto out; \
@@ -502,13 +506,18 @@ z_function_def(z_Fd::z_forward, int, z_Fd *a_fd, z_Fd *b_fd, int a_pipe, int b_p
     forward_a2b();
     forward_b2a();
 
-    while (!a_eof || !b_eof) {
-        // re-arm timer
-        if (opt.idle_timeout > 0 || opt.half_timeout > 0) {
-            // todo: half timer can only be armed once
-            int timeout = (!a_eof && !b_eof) ? opt.idle_timeout : opt.half_timeout;
-            z_timer_disarm();
-            z_timer_arm(timeout);
+    while (!a_shutdown || !b_shutdown) {
+        // restart timer
+        if (!a_shutdown && !b_shutdown) {
+            // transmission in progress
+            if (opt.idle_timeout > 0)
+                z_timer_restart(opt.idle_timeout);
+        } else {
+            // half-closed state
+            if (opt.half_timeout > 0 && !half_started) {
+                half_started = true;
+                z_timer_restart(opt.half_timeout);
+            }
         }
 
         // wait for events
@@ -531,7 +540,7 @@ z_function_def(z_Fd::z_forward, int, z_Fd *a_fd, z_Fd *b_fd, int a_pipe, int b_p
                 std::unreachable();
         }
     }
-    assert(a_eof && b_eof);
+    assert(a_shutdown && b_shutdown);
     res = 0;
 
     #undef forward_a2b
@@ -552,7 +561,7 @@ z_function_def(z_Fd::z_forward, int, z_Fd *a_fd, z_Fd *b_fd, int a_pipe, int b_p
 
 bool z_Fd::z_forward::do_forward(
     z_Waiter *w, z_Fd *in, z_Fd *out,
-    int pipe, size_t &len, bool &eof,
+    int pipe, size_t &len, bool &shutdown,
     unsigned flags) noexcept
 {
     constexpr size_t splice_sz = 1048576; // 1MB
@@ -566,7 +575,7 @@ bool z_Fd::z_forward::do_forward(
             } else if (n == 0) {
                 // EOF
                 out->shutdown(SHUT_WR);
-                eof = true;
+                shutdown = true;
                 return true;
             } else if (errno == EAGAIN) {
                 in->has_data = false;

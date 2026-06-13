@@ -85,6 +85,7 @@ public:
     // accessible only when z_yield() resume
     z_EventCtx *event_ctx() const noexcept { return _event_ctx; }
 
+private:
     // the `waiter` must be z_Task::waiter
     static void waiter_cb(z_Waiter *waiter, void *data) noexcept {
         z_Task *task = z_container_of<&z_Task::waiter>(waiter);
@@ -220,6 +221,11 @@ void z_subtask_deinit(T *task) noexcept {
 // place it on the line above `z_return*`
 #define z_timer_disarm() do { \
     z_env::del_timer(z_timer()); \
+} while (0)
+
+#define z_timer_restart(timeout) do { \
+    z_timer_disarm(); \
+    z_timer_arm(timeout); \
 } while (0)
 
 #define z_yield() do { \

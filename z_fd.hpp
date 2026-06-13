@@ -136,8 +136,9 @@ public:
     // for byte-stream && use splice to zero-copy
     struct z_forward {
         z_leaf_fields();
-        bool a_eof = false;
-        bool b_eof = false;
+        bool a_shutdown = false;
+        bool b_shutdown = false;
+        bool half_started = false;
         z_Waiter waiter{waiter_cb};
         z_Task *task = nullptr;
         size_t a_len = 0;
