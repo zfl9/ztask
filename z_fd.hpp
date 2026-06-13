@@ -18,6 +18,7 @@ private:
     uint32_t ep_events = 0; // events registered in epoll(kernel)
     uint32_t ref_count = 1;
     int raw_fd = -1;
+    uint8_t in_event_fn = 0;
     bool has_data = true; // set to false when a read operation encounters EAGAIN
     bool has_space = true; // set to false when a write operation encounters EAGAIN
 
@@ -30,6 +31,7 @@ public:
 
     void close() noexcept;
     bool is_closed() const noexcept { return raw_fd < 0; }
+    int shutdown(int how) noexcept { return ::shutdown(raw_fd, how); }
 
     void add_read_w(z_Waiter *w) noexcept;
     void add_write_w(z_Waiter *w) noexcept;
@@ -37,9 +39,11 @@ public:
     void del_read_w(z_Waiter *w) noexcept;
     void del_write_w(z_Waiter *w) noexcept;
 
-    void on_event(bool ev_data, bool ev_space) noexcept;
+    uint32_t want_events() const noexcept;
 
-    int shutdown(int how) noexcept { return ::shutdown(raw_fd, how); }
+    void sync_dirty_state() noexcept;
+
+    void on_event(bool ev_data, bool ev_space) noexcept;
 
     // for byte-stream
     struct z_read {

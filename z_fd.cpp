@@ -1,6 +1,7 @@
 #include "z_fd.hpp"
 #include <asm-generic/errno.h>
 #include <sys/socket.h>
+#include <sys/epoll.h>
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -28,35 +29,47 @@ void z_Fd::add_read_w(z_Waiter *w) noexcept {
     assert(!has_data && !is_closed());
     bool pre_empty = read_wq.is_empty();
     read_wq.push_tail(w);
-    if (pre_empty) z_env::on_fd_dirty(this);
+    if (pre_empty && !in_event_fn) z_env::on_fd_dirty(this);
 }
 
 void z_Fd::add_write_w(z_Waiter *w) noexcept {
     assert(!has_space && !is_closed());
     bool pre_empty = write_wq.is_empty();
     write_wq.push_tail(w);
-    if (pre_empty) z_env::on_fd_dirty(this);
+    if (pre_empty && !in_event_fn) z_env::on_fd_dirty(this);
 }
 
 void z_Fd::del_read_w(z_Waiter *w) noexcept {
-    if (read_wq.is_empty()) return;
     w->unlink(); // pop from read_wq
-    if (read_wq.is_empty() && !is_closed()) z_env::on_fd_dirty(this);
+    sync_dirty_state();
 }
 
 void z_Fd::del_write_w(z_Waiter *w) noexcept {
-    if (write_wq.is_empty()) return;
     w->unlink(); // pop from write_wq
-    if (write_wq.is_empty() && !is_closed()) z_env::on_fd_dirty(this);
+    sync_dirty_state();
+}
+
+uint32_t z_Fd::want_events() const noexcept {
+    uint32_t want_events = 0;
+    if (!read_wq.is_empty()) want_events |= EPOLLIN;
+    if (!write_wq.is_empty()) want_events |= EPOLLOUT;
+    return want_events;
+}
+
+void z_Fd::sync_dirty_state() noexcept {
+    if (is_closed() || in_event_fn) return;
+
+    if (want_events() != ep_events)
+        z_env::on_fd_dirty(this);
+    else
+        ep_node.unlink();
 }
 
 void z_Fd::on_event(bool ev_data, bool ev_space) noexcept {
     if (ev_data) has_data = true;
     if (ev_space) has_space = true;
 
-    bool read_wq_empty = read_wq.is_empty();
-    bool write_wq_empty = write_wq.is_empty();
-
+    ++in_event_fn;
     while (has_data || is_closed()) {
         auto *w = read_wq.pop_head();
         if (!w) break;
@@ -67,13 +80,9 @@ void z_Fd::on_event(bool ev_data, bool ev_space) noexcept {
         if (!w) break;
         w->callback(w, this);
     }
+    --in_event_fn;
 
-    // sync dirty state
-    if (!is_closed()) {
-        if (read_wq_empty != read_wq.is_empty() || write_wq_empty != write_wq.is_empty()) {
-            z_env::on_fd_dirty(this);
-        }
-    }
+    sync_dirty_state();
 }
 
 namespace {
