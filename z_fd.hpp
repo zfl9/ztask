@@ -19,8 +19,8 @@ private:
     uint32_t ref_count = 1;
     int raw_fd = -1;
     uint8_t in_event_fn = 0;
-    bool has_data = true; // set to false when a read operation encounters EAGAIN
-    bool has_space = true; // set to false when a write operation encounters EAGAIN
+    bool has_data = true; // set to false when read encounter EAGAIN
+    bool has_space = true; // set to false when write encounter EAGAIN
 
     explicit z_Fd(int fd) noexcept : raw_fd{fd} {}
     ~z_Fd() noexcept { close(); }
@@ -163,6 +163,6 @@ public:
         }
 
         static bool do_forward(z_Waiter *w, z_Fd *in, z_Fd *out,
-            int pipe, size_t &len, bool &eof, unsigned flags) noexcept;
+            int pipe, size_t &len, bool &shutdown, unsigned flags) noexcept;
     };
 };

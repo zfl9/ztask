@@ -26,17 +26,17 @@ void z_Fd::close() noexcept {
 }
 
 void z_Fd::add_read_w(z_Waiter *w) noexcept {
-    assert(!has_data && !is_closed());
-    bool pre_empty = read_wq.is_empty();
+    assert(!is_closed());
+    has_data = false;
     read_wq.push_tail(w);
-    if (pre_empty && !in_event_fn) z_env::on_fd_dirty(this);
+    sync_dirty_state();
 }
 
 void z_Fd::add_write_w(z_Waiter *w) noexcept {
-    assert(!has_space && !is_closed());
-    bool pre_empty = write_wq.is_empty();
+    assert(!is_closed());
+    has_space = false;
     write_wq.push_tail(w);
-    if (pre_empty && !in_event_fn) z_env::on_fd_dirty(this);
+    sync_dirty_state();
 }
 
 void z_Fd::del_read_w(z_Waiter *w) noexcept {
@@ -124,7 +124,6 @@ z_function_def(z_Fd::z_read, ssize_t, z_Fd *fd, const iovec *iov, int iovcnt, Op
             // EOF
             goto out;
         } else if (errno == EAGAIN) {
-            fd->has_data = false;
             fd->add_read_w(z_waiter());
             z_yield();
             switch (z_event()) {
@@ -178,7 +177,6 @@ z_function_def(z_Fd::z_write, ssize_t, z_Fd *fd, const iovec *iov, int iovcnt, O
             // avoid infinite loop
             goto out;
         } else if (errno == EAGAIN) {
-            fd->has_space = false;
             fd->add_write_w(z_waiter());
             z_yield();
             switch (z_event()) {
@@ -246,7 +244,6 @@ z_function_def(z_Fd::z_recv, ssize_t, z_Fd *fd, msghdr *msg, Opt opt) {
             // EOF
             goto out;
         } else if (errno == EAGAIN) {
-            fd->has_data = false;
             fd->add_read_w(z_waiter());
             z_yield();
             switch (z_event()) {
@@ -309,7 +306,6 @@ z_function_def(z_Fd::z_send, ssize_t, z_Fd *fd, const msghdr *msg, Opt opt) {
             // avoid infinite loop
             goto out;
         } else if (errno == EAGAIN) {
-            fd->has_space = false;
             fd->add_write_w(z_waiter());
             z_yield();
             switch (z_event()) {
@@ -349,7 +345,6 @@ z_function_def(z_Fd::z_recvmmsg, int, z_Fd *fd, mmsghdr *msgv, unsigned vlen, Op
         if (n_msg >= 0 || errno != EAGAIN) {
             goto out;
         } else {
-            fd->has_data = false;
             fd->add_read_w(z_waiter());
             z_yield();
             switch (z_event()) {
@@ -389,7 +384,6 @@ z_function_def(z_Fd::z_sendmmsg, int, z_Fd *fd, mmsghdr *msgv, unsigned vlen, Op
             // avoid infinite loop
             goto out;
         } else if (errno == EAGAIN) {
-            fd->has_space = false;
             fd->add_write_w(z_waiter());
             z_yield();
             switch (z_event()) {
@@ -429,7 +423,6 @@ z_function_def(z_Fd::z_accept, int, z_Fd *fd, z_net::Addr *addr, Opt opt) {
         if (new_fd >= 0 || errno != EAGAIN) {
             goto out;
         } else {
-            fd->has_data = false;
             fd->add_read_w(z_waiter());
             z_yield();
             switch (z_event()) {
@@ -465,7 +458,6 @@ z_function_def(z_Fd::z_connect, int, z_Fd *fd, const z_net::Addr *addr, Opt opt)
     if (res == 0 || errno != EINPROGRESS)
         goto out;
 
-    fd->has_space = false;
     fd->add_write_w(z_waiter());
     z_yield();
     switch (z_event()) {
@@ -578,6 +570,7 @@ z_function_def(z_Fd::z_forward, int, z_Fd *a_fd, z_Fd *b_fd, int a_pipe, int b_p
     z_return(res);
 }
 
+/// @return OK
 bool z_Fd::z_forward::do_forward(
     z_Waiter *w, z_Fd *in, z_Fd *out,
     int pipe, size_t &len, bool &shutdown,
@@ -597,7 +590,6 @@ bool z_Fd::z_forward::do_forward(
                 shutdown = true;
                 return true;
             } else if (errno == EAGAIN) {
-                in->has_data = false;
                 in->add_read_w(w);
                 return true;
             } else {
@@ -616,7 +608,6 @@ bool z_Fd::z_forward::do_forward(
                 errno = EDEADLOCK;
                 return false;
             } else if (errno == EAGAIN) {
-                out->has_space = false;
                 out->add_write_w(w);
                 return true;
             } else {
