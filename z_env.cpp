@@ -5,8 +5,8 @@
 #include <cstring>
 #include <cassert>
 #include "z_util.hpp"
-#include "z_epoll.hpp"
 #include "z_timer.hpp"
+#include "z_epoll.hpp"
 
 // user setting: local-exec, initial-exec, local-dynamic, global-dynamic
 #ifdef Z_TLS_MODEL
@@ -90,9 +90,9 @@ namespace {
     }
 }
 
-// z_env_impl (thread_local)
+// z_env_local (thread_local)
 namespace {
-    struct z_EnvImpl {
+    struct z_EnvLocal {
         uint64_t tick_time = sys_tick_time();
         uint64_t wall_time = sys_wall_time();
         std::array<char, 24> wall_timestr{init_wall_timestr(wall_time)};
@@ -106,68 +106,68 @@ namespace {
         }
     };
 
-    alignas(z_EnvImpl) __thread char z_env_impl_storage[sizeof(z_EnvImpl)] z_attr_tls_model;
+    alignas(z_EnvLocal) __thread char z_env_local_storage[sizeof(z_EnvLocal)] z_attr_tls_model;
 
-    #define z_env_impl (reinterpret_cast<z_EnvImpl *>(z_env_impl_storage))
+    #define z_env_local (reinterpret_cast<z_EnvLocal *>(z_env_local_storage))
 }
 
 // ================== z_EnvInit (guard) ==================
 
 z_EnvInit::z_EnvInit() noexcept {
-    new (z_env_impl_storage) z_EnvImpl{};
+    new (z_env_local_storage) z_EnvLocal{};
 }
 
 z_EnvInit::~z_EnvInit() noexcept {
-    z_env_impl->~z_EnvImpl();
+    z_env_local->~z_EnvLocal();
 }
 
 // ================== z_env (thin wrapper) ==================
 
 uint64_t z_env::tick_time() noexcept {
-    return z_env_impl->tick_time;
+    return z_env_local->tick_time;
 }
 
 uint64_t z_env::wall_time() noexcept {
-    return z_env_impl->wall_time;
+    return z_env_local->wall_time;
 }
 
 const char *z_env::wall_timestr() noexcept {
-    return z_env_impl->wall_timestr.data();
+    return z_env_local->wall_timestr.data();
 }
 
 void z_env::time_update() noexcept {
-    return z_env_impl->time_update();
+    return z_env_local->time_update();
 }
 
 z_TimerMgr *z_env::timer_mgr() noexcept {
-    return &z_env_impl->timer_mgr;
+    return &z_env_local->timer_mgr;
 }
 
 z_Epoll *z_env::epoll() noexcept {
-    return &z_env_impl->epoll;
+    return &z_env_local->epoll;
 }
 
 void z_env::add_timer(z_Timer *timer, uint64_t after_ms) noexcept {
-    timer->expire = z_env_impl->tick_time + after_ms;
-    return z_env_impl->timer_mgr.add_timer(timer);
+    timer->expire = z_env_local->tick_time + after_ms;
+    return z_env_local->timer_mgr.add_timer(timer);
 }
 
 void z_env::add_timer(z_Timer *timer) noexcept {
-    return z_env_impl->timer_mgr.add_timer(timer);
+    return z_env_local->timer_mgr.add_timer(timer);
 }
 
 void z_env::del_timer(z_Timer *timer) noexcept {
-    return z_env_impl->timer_mgr.del_timer(timer);
+    return z_env_local->timer_mgr.del_timer(timer);
 }
 
 void z_env::on_fd_dirty(z_Fd *fd) noexcept {
-    return z_env_impl->epoll.on_fd_dirty(fd);
+    return z_env_local->epoll.on_fd_dirty(fd);
 }
 
 void z_env::on_fd_close(z_Fd *fd) noexcept {
-    return z_env_impl->epoll.on_fd_close(fd);
+    return z_env_local->epoll.on_fd_close(fd);
 }
 
 void z_env::run() noexcept {
-    return z_env_impl->epoll.run();
+    return z_env_local->epoll.run();
 }
