@@ -2,7 +2,7 @@
 #include "z_list.hpp"
 
 struct z_Waiter {
-    using Callback = void (*)(z_Waiter *waiter, void *data) noexcept;
+    using Callback = void (*)(z_Waiter *waiter, void *arg) noexcept;
 
     z_Node node{};
     Callback callback = nullptr;

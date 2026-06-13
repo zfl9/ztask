@@ -23,7 +23,7 @@ struct z_EventCtx {
         z_Waiter *waiter;
         z_Timer *timer;
     } u{}; // the object that triggers the event
-    void *data = nullptr; // event data (available only when the trigger is `u.waiter`)
+    void *arg = nullptr; // event argument (available only when the trigger is `u.waiter`)
 };
 
 // task interface (structured coroutine)
@@ -87,11 +87,11 @@ public:
 
 private:
     // the `waiter` must be z_Task::waiter
-    static void waiter_cb(z_Waiter *waiter, void *data) noexcept {
+    static void waiter_cb(z_Waiter *waiter, void *arg) noexcept {
         z_Task *task = z_container_of<&z_Task::waiter>(waiter);
         z_EventCtx event_ctx{
             .u = {.waiter = waiter},
-            .data = data,
+            .arg = arg,
         };
         return task->resume(z_Event::WAITER, &event_ctx);
     }
@@ -101,7 +101,7 @@ private:
         z_Task *task = z_container_of<&z_Task::timer>(timer);
         z_EventCtx event_ctx{
             .u = {.timer = timer},
-            .data = nullptr,
+            .arg = nullptr,
         };
         return task->resume(z_Event::TIMER, &event_ctx);
     }

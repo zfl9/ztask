@@ -153,11 +153,11 @@ public:
         struct Opt { unsigned flags; int idle_timeout; int half_timeout; };
         z_function(int, z_Fd *a_fd, z_Fd *b_fd, int a_pipe, int b_pipe, Opt opt = {});
 
-        static void waiter_cb(z_Waiter *waiter, void *data) noexcept {
+        static void waiter_cb(z_Waiter *waiter, void *arg) noexcept {
             z_forward *f = z_container_of<&z_forward::waiter>(waiter);
             z_EventCtx event_ctx{
                 .u = {.waiter = waiter},
-                .data = data,
+                .arg = arg,
             };
             return f->task->resume(z_Event::WAITER, &event_ctx);
         }
