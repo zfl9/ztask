@@ -15,6 +15,7 @@ struct z_net {
 
         static Addr from(int family, const char *ip, uint16_t port) noexcept;
         socklen_t len() const noexcept { return is_ipv4() ? sizeof(sin) : sizeof(sin6); }
+        bool is_valid() const noexcept { return sa.sa_family != 0; }
         bool is_ipv4() const noexcept { return sa.sa_family == AF_INET; }
         bool is_ipv6() const noexcept { return sa.sa_family == AF_INET6; }
         void tostring(char ip[INET6_ADDRSTRLEN], uint16_t *port) const noexcept;

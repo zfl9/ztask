@@ -11,14 +11,16 @@
 z_net::Addr z_net::Addr::from(int family, const char *ip, uint16_t port) noexcept {
     z_net::Addr addr{}; // zero init
     if (family == AF_INET) {
-        addr.sin.sin_family = family;
-        inet_pton(AF_INET, ip, &addr.sin.sin_addr);
-        addr.sin.sin_port = htons(port);
+        if (inet_pton(AF_INET, ip, &addr.sin.sin_addr) == 1) {
+            addr.sin.sin_family = family;
+            addr.sin.sin_port = htons(port);
+        }
     } else {
         assert(family == AF_INET6);
-        addr.sin6.sin6_family = family;
-        inet_pton(AF_INET6, ip, &addr.sin6.sin6_addr);
-        addr.sin6.sin6_port = htons(port);
+        if (inet_pton(AF_INET6, ip, &addr.sin6.sin6_addr) == 1) {
+            addr.sin6.sin6_family = family;
+            addr.sin6.sin6_port = htons(port);
+        }
     }
     return addr;
 }
