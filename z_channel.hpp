@@ -1,8 +1,8 @@
 #pragma once
 #include <bit>
 #include <new>
-#include <utility>
 #include <cerrno>
+#include <cassert>
 #include "z_ref.hpp"
 #include "z_task.hpp"
 #include "z_waiter.hpp"
@@ -29,7 +29,9 @@ private:
         _capacity{std::bit_ceil(capacity)},
         _array{new (std::nothrow) T[_capacity]},
         _destroy_fn{destroy_fn}
-        {}
+    {
+        assert(_array != nullptr && "array allocation failed");
+    }
 
     ~z_Channel() noexcept {
         close();
