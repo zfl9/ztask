@@ -41,10 +41,4 @@ struct z_env {
 struct z_EnvInit {
     z_EnvInit() noexcept;
     ~z_EnvInit() noexcept;
-
-    z_EnvInit(const z_EnvInit &) = delete;
-    z_EnvInit &operator=(const z_EnvInit &) = delete;
-
-    z_EnvInit(z_EnvInit &&) = delete;
-    z_EnvInit &operator=(z_EnvInit &&) = delete;
 };

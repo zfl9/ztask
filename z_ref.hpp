@@ -49,7 +49,7 @@ public:
 
 #define z_ref_create(T) \
     template<typename... Args> \
-    [[nodiscard]] static z_Ref<T> create(Args&&... args) noexcept { \
+    [[nodiscard]] static z_Ref<T> create(Args &&... args) noexcept { \
         T *ptr = new (std::nothrow) T{std::forward<Args>(args)...}; \
         return z_Ref<T>{ ptr }; \
     }
