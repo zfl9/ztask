@@ -126,13 +126,9 @@ namespace {
         size_t skip_bytes) noexcept
     {
         int skip_iovcnt = 0;
-        while (skip_iovcnt < raw_iovcnt) {
-            if (skip_bytes >= raw_iov[skip_iovcnt].iov_len) {
-                skip_bytes -= raw_iov[skip_iovcnt].iov_len;
-                ++skip_iovcnt;
-            } else {
-                break;
-            }
+        while (skip_iovcnt < raw_iovcnt && skip_bytes >= raw_iov[skip_iovcnt].iov_len) {
+            skip_bytes -= raw_iov[skip_iovcnt].iov_len;
+            ++skip_iovcnt;
         }
 
         if (skip_bytes == 0) {
