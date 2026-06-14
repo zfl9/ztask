@@ -38,7 +38,7 @@ public:
     [[nodiscard]] T *raw() const noexcept { return ptr; } // raw pointer
 };
 
-#define z_ref_impl(T) \
+#define z_ref_counted(T) \
     T(T &&) = delete; \
     T(const T &) = delete; \
     T &operator=(T &&) = delete; \
@@ -47,7 +47,7 @@ public:
     [[nodiscard]] T *add_ref() noexcept { ++ref_count; return this; } \
     void drop_ref() noexcept { if (--ref_count == 0) delete this; }
 
-#define z_ref_create(T) \
+#define z_ref_creator(T) \
     template<typename... Args> \
     [[nodiscard]] static z_Ref<T> create(Args &&... args) noexcept { \
         T *ptr = new (std::nothrow) T{std::forward<Args>(args)...}; \

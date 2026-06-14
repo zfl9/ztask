@@ -26,8 +26,8 @@ private:
     ~z_Fd() noexcept { close(); }
 
 public:
-    z_ref_impl(z_Fd);
-    z_ref_create(z_Fd);
+    z_ref_counted(z_Fd);
+    z_ref_creator(z_Fd);
 
     void close() noexcept;
     bool is_closed() const noexcept { return raw_fd < 0; }

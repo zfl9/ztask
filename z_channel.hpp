@@ -45,8 +45,8 @@ private:
     }
 
 public:
-    z_ref_impl(z_Channel);
-    z_ref_create(z_Channel);
+    z_ref_counted(z_Channel);
+    z_ref_creator(z_Channel);
 
     struct z_read {
         z_leaf_fields();

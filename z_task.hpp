@@ -42,7 +42,7 @@ private:
     z_EventCtx *_event_ctx = nullptr;
 
 public:
-    z_ref_impl(z_Task);
+    z_ref_counted(z_Task);
 
     void resume(z_Event event, z_EventCtx *event_ctx) noexcept {
         assert(_event == z_Event::_NULL && _event_ctx == nullptr);
