@@ -60,5 +60,7 @@ private:
 
     void link_timer(unsigned level, unsigned index, z_Timer *timer) noexcept;
 
-    void discharge(unsigned level) noexcept;
+    void harvest(z_TimerList *ready_list) noexcept;
+
+    void cascade(unsigned level) noexcept;
 };

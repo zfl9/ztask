@@ -183,42 +183,47 @@ int z_TimerMgr::epoll_timeout() const noexcept {
 
 void z_TimerMgr::update() noexcept {
     uint64_t now = z_env::tick_time();
+    z_TimerList ready_list;
 
     while (current < now) {
-        uint64_t step = distance();
-        uint64_t max_step = now - current;
+        uint64_t dist = distance();
+        uint64_t dist_to_now = now - current;
 
-        if (step > max_step) {
+        if (dist > dist_to_now) {
             current = now;
             break;
         }
-        current += step;
+        current += dist;
 
         auto zeros = std::countr_zero(current);
         if (zeros >= 8) {
-            discharge(1);
+            cascade(1);
             if (zeros >= 16) {
-                discharge(2);
+                cascade(2);
                 if (zeros >= 22) {
-                    discharge(3);
+                    cascade(3);
                 }
             }
         }
-        discharge(0);
+
+        harvest(&ready_list);
     }
+
+    while (z_Timer *timer = ready_list.pop_head())
+        timer->callback(timer);
 }
 
-void z_TimerMgr::discharge(unsigned level) noexcept {
+void z_TimerMgr::harvest(z_TimerList *ready_list) noexcept {
+    unsigned index = current & 0xFF;
+    if (!test_bit(bitset_0, index)) return;
+    clear_bit(bitset_0, index);
+    ready_list->splice_tail(&level_0[index]);
+}
+
+void z_TimerMgr::cascade(unsigned level) noexcept {
     z_TimerList *list;
 
     switch (level) {
-        case 0: {
-            unsigned index = current & 0xFF;
-            if (!test_bit(bitset_0, index)) return;
-            clear_bit(bitset_0, index);
-            list = &level_0[index];
-            break;
-        }
         case 1: {
             unsigned index = (current >> 8) & 0xFF;
             if (!test_bit(bitset_1, index)) return;
@@ -245,11 +250,8 @@ void z_TimerMgr::discharge(unsigned level) noexcept {
     }
 
     z_TimerList tmp_list;
-    tmp_list.steal_tail(list);
+    tmp_list.splice_tail(list);
 
-    if (level == 0) {
-        while (z_Timer *timer = tmp_list.pop_head()) timer->callback(timer);
-    } else {
-        while (z_Timer *timer = tmp_list.pop_head()) do_add_timer(timer);
-    }
+    while (z_Timer *timer = tmp_list.pop_head())
+        do_add_timer(timer);
 }

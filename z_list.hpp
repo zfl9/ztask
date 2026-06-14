@@ -107,7 +107,7 @@ struct z_Node {
         }
     }
 
-    void steal_head(z_Node *moved_root) noexcept {
+    void splice_head(z_Node *moved_root) noexcept {
         assert(moved_root != this);
         if (moved_root->is_empty()) return;
 
@@ -120,7 +120,7 @@ struct z_Node {
         moved_root->init();
     }
 
-    void steal_tail(z_Node *moved_root) noexcept {
+    void splice_tail(z_Node *moved_root) noexcept {
         assert(moved_root != this);
         if (moved_root->is_empty()) return;
 
@@ -238,13 +238,13 @@ struct z_List {
     }
 
     /// move all elements from `moved_list` to head. O(1)
-    void steal_head(z_List *moved_list) noexcept {
-        return root.steal_head(&moved_list->root);
+    void splice_head(z_List *moved_list) noexcept {
+        return root.splice_head(&moved_list->root);
     }
 
     /// move all elements from `moved_list` to tail. O(1)
-    void steal_tail(z_List *moved_list) noexcept {
-        return root.steal_tail(&moved_list->root);
+    void splice_tail(z_List *moved_list) noexcept {
+        return root.splice_tail(&moved_list->root);
     }
 
     struct IterEnd {};
