@@ -25,12 +25,17 @@ private:
     explicit z_Fd(int fd) noexcept : raw_fd{fd} {}
     ~z_Fd() noexcept { close(); }
 
+    void sync_dirty_state() noexcept;
+
 public:
     z_ref_counted(z_Fd);
     z_ref_creator(z_Fd);
 
+    int handle() const noexcept { return raw_fd; }
+
     void close() noexcept;
     bool is_closed() const noexcept { return raw_fd < 0; }
+
     int shutdown(int how) noexcept { return ::shutdown(raw_fd, how); }
 
     void add_read_w(z_Waiter *w) noexcept;
@@ -40,8 +45,6 @@ public:
     void del_write_w(z_Waiter *w) noexcept;
 
     uint32_t want_events() const noexcept;
-
-    void sync_dirty_state() noexcept;
 
     void on_event(bool ev_data, bool ev_space) noexcept;
 
