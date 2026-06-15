@@ -25,15 +25,17 @@ z_net::Addr z_net::Addr::from(int family, const char *ip, uint16_t port) noexcep
     return addr;
 }
 
-void z_net::Addr::tostring(char ip[INET6_ADDRSTRLEN], uint16_t *port) const noexcept {
+z_net::Addr::Text z_net::Addr::to_text() const noexcept {
+    Text res;
     if (sa.sa_family == AF_INET) {
-        inet_ntop(AF_INET, &sin.sin_addr, ip, INET_ADDRSTRLEN);
-        *port = ntohs(sin.sin_port);
+        inet_ntop(AF_INET, &sin.sin_addr, res.ip, sizeof(res.ip));
+        res.port = ntohs(sin.sin_port);
     } else {
         assert(sa.sa_family == AF_INET6);
-        inet_ntop(AF_INET6, &sin6.sin6_addr, ip, INET6_ADDRSTRLEN);
-        *port = ntohs(sin6.sin6_port);
+        inet_ntop(AF_INET6, &sin6.sin6_addr, res.ip, sizeof(res.ip));
+        res.port = ntohs(sin6.sin6_port);
     }
+    return res;
 }
 
 void z_net::ignore_sigpipe() noexcept {

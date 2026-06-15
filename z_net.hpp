@@ -13,12 +13,18 @@ struct z_net {
         struct sockaddr_in sin;
         struct sockaddr sa;
 
+        struct Text {
+            char ip[INET6_ADDRSTRLEN];
+            uint16_t port;
+        };
+
         static Addr from(int family, const char *ip, uint16_t port) noexcept;
-        socklen_t len() const noexcept { return is_ipv4() ? sizeof(sin) : sizeof(sin6); }
+        Text to_text() const noexcept;
+
         bool is_valid() const noexcept { return sa.sa_family != 0; }
         bool is_ipv4() const noexcept { return sa.sa_family == AF_INET; }
         bool is_ipv6() const noexcept { return sa.sa_family == AF_INET6; }
-        void tostring(char ip[INET6_ADDRSTRLEN], uint16_t *port) const noexcept;
+        socklen_t len() const noexcept { return is_ipv4() ? sizeof(sin) : sizeof(sin6); }
     };
 
     static void ignore_sigpipe() noexcept;
