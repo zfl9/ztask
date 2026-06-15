@@ -68,6 +68,10 @@ int z_net::getsockopt_int(int fd, int level, int opt, int *value) noexcept {
     return ::getsockopt(fd, level, opt, value, &len);
 }
 
+int z_net::set_ipv6only(int fd, bool v6only) noexcept {
+    return setsockopt_int(fd, IPPROTO_IPV6, IPV6_V6ONLY, v6only ? 1 : 0);
+}
+
 int z_net::set_reuseaddr(int fd) noexcept {
     return setsockopt_int(fd, SOL_SOCKET, SO_REUSEADDR, 1);
 }

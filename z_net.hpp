@@ -38,6 +38,7 @@ struct z_net {
     static int setsockopt_int(int fd, int level, int opt, int value) noexcept;
     static int getsockopt_int(int fd, int level, int opt, int *value) noexcept;
 
+    static int set_ipv6only(int fd, bool v6only) noexcept;
     static int set_reuseaddr(int fd) noexcept;
     static int set_reuseport(int fd) noexcept;
     static int set_nodelay(int fd) noexcept;
