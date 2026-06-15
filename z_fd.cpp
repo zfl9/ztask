@@ -455,7 +455,7 @@ z_function_def(z_Fd::z_connect, int, z_Fd *fd, const z_net::Addr *addr, Opt opt)
     z_timer_arm(opt.timeout);
 
     int res; res = z_net::connect(fd->raw_fd, addr);
-    if (res == 0 || errno != EINPROGRESS)
+    if (res >= 0 || errno != EINPROGRESS)
         goto out;
 
     fd->add_write_w(z_waiter());
@@ -465,7 +465,7 @@ z_function_def(z_Fd::z_connect, int, z_Fd *fd, const z_net::Addr *addr, Opt opt)
             if (fd->is_closed()) [[unlikely]] {
                 errno = ESHUTDOWN;
                 res = -1;
-            } else if (!z_net::getsockopt_int(fd->raw_fd, SOL_SOCKET, SO_ERROR, &res)) [[unlikely]] {
+            } else if (z_net::getsockopt_int(fd->raw_fd, SOL_SOCKET, SO_ERROR, &res) < 0) [[unlikely]] {
                 // getsockopt fail
                 res = -1;
             } else if (res != 0) [[unlikely]] {
@@ -499,7 +499,7 @@ z_function_def(z_Fd::z_forward, int, z_Fd *a_fd, z_Fd *b_fd, int a_pipe, int b_p
     int res;
 
     #define forward_a2b() do { \
-        if (!do_forward(z_waiter(), a_fd, b_fd, a_pipe, a_len, a_shutdown, opt.flags)) [[unlikely]] { \
+        if (do_forward(z_waiter(), a_fd, b_fd, a_pipe, a_len, a_shutdown, opt.flags) < 0) [[unlikely]] { \
             /* errno has been set */ \
             res = -1; \
             goto out; \
@@ -507,7 +507,7 @@ z_function_def(z_Fd::z_forward, int, z_Fd *a_fd, z_Fd *b_fd, int a_pipe, int b_p
     } while (0)
 
     #define forward_b2a() do { \
-        if (!do_forward(&waiter, b_fd, a_fd, b_pipe, b_len, b_shutdown, opt.flags)) [[unlikely]] { \
+        if (do_forward(&waiter, b_fd, a_fd, b_pipe, b_len, b_shutdown, opt.flags) < 0) [[unlikely]] { \
             /* errno has been set */ \
             res = -1; \
             goto out; \
@@ -531,7 +531,7 @@ z_function_def(z_Fd::z_forward, int, z_Fd *a_fd, z_Fd *b_fd, int a_pipe, int b_p
             }
         }
 
-        // wait for events
+        // waiting for events
         z_yield();
         switch (z_event()) {
             case z_Event::WAITER: {
@@ -570,8 +570,7 @@ z_function_def(z_Fd::z_forward, int, z_Fd *a_fd, z_Fd *b_fd, int a_pipe, int b_p
     z_return(res);
 }
 
-/// @return OK
-bool z_Fd::z_forward::do_forward(
+int z_Fd::z_forward::do_forward(
     z_Waiter *w, z_Fd *in, z_Fd *out,
     int pipe, size_t &len, bool &shutdown,
     unsigned flags) noexcept
@@ -588,13 +587,12 @@ bool z_Fd::z_forward::do_forward(
                 // EOF
                 out->shutdown(SHUT_WR);
                 shutdown = true;
-                return true;
+                return 0;
             } else if (errno == EAGAIN) {
                 in->add_read_w(w);
-                return true;
+                return 0;
             } else {
-                // error
-                return false;
+                return -1;
             }
         }
 
@@ -606,13 +604,12 @@ bool z_Fd::z_forward::do_forward(
             } else if (n == 0) {
                 // avoid infinite loop
                 errno = EDEADLOCK;
-                return false;
+                return -1;
             } else if (errno == EAGAIN) {
                 out->add_write_w(w);
-                return true;
+                return 0;
             } else {
-                // error
-                return false;
+                return -1;
             }
         }
     }

@@ -59,37 +59,49 @@ int z_net::new_sock(int family, int type) noexcept {
     return ::socket(family, type | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
 }
 
-bool z_net::setsockopt_int(int fd, int level, int opt, int value) noexcept {
-    return ::setsockopt(fd, level, opt, &value, sizeof(value)) == 0;
+int z_net::setsockopt_int(int fd, int level, int opt, int value) noexcept {
+    return ::setsockopt(fd, level, opt, &value, sizeof(value));
 }
 
-bool z_net::getsockopt_int(int fd, int level, int opt, int *value) noexcept {
+int z_net::getsockopt_int(int fd, int level, int opt, int *value) noexcept {
     socklen_t len = sizeof(*value);
-    return ::getsockopt(fd, level, opt, value, &len) == 0;
+    return ::getsockopt(fd, level, opt, value, &len);
 }
 
-bool z_net::set_reuseaddr(int fd) noexcept {
+int z_net::set_reuseaddr(int fd) noexcept {
     return setsockopt_int(fd, SOL_SOCKET, SO_REUSEADDR, 1);
 }
 
-bool z_net::set_reuseport(int fd) noexcept {
+int z_net::set_reuseport(int fd) noexcept {
     return setsockopt_int(fd, SOL_SOCKET, SO_REUSEPORT, 1);
 }
 
-bool z_net::set_nodelay(int fd) noexcept {
+int z_net::set_nodelay(int fd) noexcept {
     return setsockopt_int(fd, IPPROTO_TCP, TCP_NODELAY, 1);
 }
 
-bool z_net::set_keepalive(int fd, int idle_sec, int interval_sec, int count) noexcept {
-    if (!setsockopt_int(fd, SOL_SOCKET, SO_KEEPALIVE, 1)) [[unlikely]]
-        return false;
-    if (idle_sec > 0 && !setsockopt_int(fd, IPPROTO_TCP, TCP_KEEPIDLE, idle_sec)) [[unlikely]]
-        return false;
-    if (interval_sec > 0 && !setsockopt_int(fd, IPPROTO_TCP, TCP_KEEPINTVL, interval_sec)) [[unlikely]]
-        return false;
-    if (count > 0 && !setsockopt_int(fd, IPPROTO_TCP, TCP_KEEPCNT, count)) [[unlikely]]
-        return false;
-    return true;
+int z_net::set_keepalive(int fd, int idle_sec, int interval_sec, int count) noexcept {
+    if (setsockopt_int(fd, SOL_SOCKET, SO_KEEPALIVE, 1) < 0) [[unlikely]]
+        return -1;
+    if (idle_sec > 0 && setsockopt_int(fd, IPPROTO_TCP, TCP_KEEPIDLE, idle_sec) < 0) [[unlikely]]
+        return -1;
+    if (interval_sec > 0 && setsockopt_int(fd, IPPROTO_TCP, TCP_KEEPINTVL, interval_sec) < 0) [[unlikely]]
+        return -1;
+    if (count > 0 && setsockopt_int(fd, IPPROTO_TCP, TCP_KEEPCNT, count) < 0) [[unlikely]]
+        return -1;
+    return 0;
+}
+
+int z_net::getsockname(int fd, Addr *addr) noexcept {
+    assert(addr != nullptr);
+    socklen_t addrlen = sizeof(*addr);
+    return ::getsockname(fd, &addr->sa, &addrlen);
+}
+
+int z_net::getpeername(int fd, Addr *addr) noexcept {
+    assert(addr != nullptr);
+    socklen_t addrlen = sizeof(*addr);
+    return ::getpeername(fd, &addr->sa, &addrlen);
 }
 
 int z_net::accept(int fd, Addr *addr) noexcept {

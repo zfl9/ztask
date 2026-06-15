@@ -165,7 +165,7 @@ public:
             return f->task->resume(z_Event::WAITER, &event_ctx);
         }
 
-        static bool do_forward(z_Waiter *w, z_Fd *in, z_Fd *out,
+        static int do_forward(z_Waiter *w, z_Fd *in, z_Fd *out,
             int pipe, size_t &len, bool &shutdown, unsigned flags) noexcept;
     };
 };

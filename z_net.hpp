@@ -35,13 +35,16 @@ struct z_net {
     // non-blocking
     static int new_sock(int family, int type) noexcept;
 
-    static bool setsockopt_int(int fd, int level, int opt, int value) noexcept;
-    static bool getsockopt_int(int fd, int level, int opt, int *value) noexcept;
+    static int setsockopt_int(int fd, int level, int opt, int value) noexcept;
+    static int getsockopt_int(int fd, int level, int opt, int *value) noexcept;
 
-    static bool set_reuseaddr(int fd) noexcept;
-    static bool set_reuseport(int fd) noexcept;
-    static bool set_nodelay(int fd) noexcept;
-    static bool set_keepalive(int fd, int idle_sec, int interval_sec, int count) noexcept;
+    static int set_reuseaddr(int fd) noexcept;
+    static int set_reuseport(int fd) noexcept;
+    static int set_nodelay(int fd) noexcept;
+    static int set_keepalive(int fd, int idle_sec, int interval_sec, int count) noexcept;
+
+    static int getsockname(int fd, Addr *addr) noexcept;
+    static int getpeername(int fd, Addr *addr) noexcept;
 
     static int accept(int fd, Addr *addr) noexcept;
     static int connect(int fd, const Addr *addr) noexcept;
