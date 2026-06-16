@@ -14,14 +14,14 @@ struct z_Channel {
     using DestroyFn = void (*)(T item) noexcept;
 
 private:
+    z_WaiterList _read_wq{};
+    z_WaiterList _write_wq{};
     size_t _head = 0;
     size_t _tail = 0;
     size_t _count = 0;
     size_t _capacity = 0;
     T *_array = nullptr;
     DestroyFn _destroy_fn = nullptr;
-    z_WaiterList _read_wq{};
-    z_WaiterList _write_wq{};
     uint32_t ref_count = 1;
     bool _closed = false;
 

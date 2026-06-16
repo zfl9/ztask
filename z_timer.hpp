@@ -31,10 +31,10 @@ private:
 
     uint64_t bitset_0[4]{}; // 256 bits
     uint64_t bitset_1[4]{}; // 256 bits
-    uint64_t bitset_2{};    // 64 bits
-    uint64_t bitset_3{};    // 64 bits
+    uint64_t bitset_2 = 0;  // 64 bits
+    uint64_t bitset_3 = 0;  // 64 bits
 
-    uint64_t current{}; // clock_monotonic in ms
+    uint64_t current = 0; // clock_monotonic in ms
 
 public:
     z_TimerMgr() noexcept : current{z_env::tick_time()} {}
