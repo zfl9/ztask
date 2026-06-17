@@ -1,11 +1,10 @@
 #pragma once
 #include <stdint.h>
+#include <array>
 #include <sys/uio.h>
 #include <sys/socket.h>
-#include <array>
 #include "z_ref.hpp"
 #include "z_waiter.hpp"
-#include "z_ref.hpp"
 #include "z_net.hpp"
 #include "z_task.hpp"
 
