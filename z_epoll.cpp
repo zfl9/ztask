@@ -1,10 +1,11 @@
 #include "z_epoll.hpp"
+#include <assert.h>
 #include <errno.h>
 #include <unistd.h>
 #include <sys/epoll.h>
-#include "z_env.hpp"
 #include "z_log.hpp"
 #include "z_timer.hpp"
+#include "z_env.hpp"
 
 z_Epoll::z_Epoll() noexcept {
     ep_fd = epoll_create1(EPOLL_CLOEXEC);

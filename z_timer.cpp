@@ -1,6 +1,6 @@
 #include "z_timer.hpp"
-#include <climits>
-#include <cassert>
+#include <assert.h>
+#include <limits.h>
 #include <utility>
 #include <bit>
 

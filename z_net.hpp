@@ -1,7 +1,7 @@
 #pragma once
-#include <cstdint>
-#include <sys/socket.h>
+#include <stdint.h>
 #include <sys/uio.h>
+#include <sys/socket.h>
 #include <netinet/in.h>
 
 struct z_net {
