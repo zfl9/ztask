@@ -27,8 +27,6 @@ struct z_net {
         socklen_t len() const noexcept { return is_ipv4() ? sizeof(sin) : sizeof(sin6); }
     };
 
-    static void ignore_sigpipe() noexcept;
-
     // AF_INET, AF_INET6, -1(error)
     static int ip_family(const char *ip) noexcept;
 

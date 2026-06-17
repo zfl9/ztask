@@ -1,4 +1,5 @@
 #pragma once
+#include <assert.h>
 #include <stdint.h>
 #include "z_list.hpp"
 #include "z_env.hpp"
@@ -34,10 +35,15 @@ private:
     uint64_t bitset_2 = 0;  // 64 bits
     uint64_t bitset_3 = 0;  // 64 bits
 
-    uint64_t current = 0; // clock_monotonic in ms
+    uint64_t current = z_env::tick_time();
 
 public:
-    z_TimerMgr() noexcept : current{z_env::tick_time()} {}
+    ~z_TimerMgr() noexcept {
+        assert((bitset_0[0] | bitset_0[1] | bitset_0[2] | bitset_0[3]) == 0);
+        assert((bitset_1[0] | bitset_1[1] | bitset_1[2] | bitset_1[3]) == 0);
+        assert(bitset_2 == 0);
+        assert(bitset_3 == 0);
+    }
 
     void add_timer(z_Timer *timer) noexcept;
 

@@ -7,14 +7,6 @@
 #include "z_timer.hpp"
 #include "z_env.hpp"
 
-z_Epoll::z_Epoll() noexcept {
-    ep_fd = epoll_create1(EPOLL_CLOEXEC);
-}
-
-z_Epoll::~z_Epoll() noexcept {
-    close(ep_fd);
-}
-
 void z_Epoll::run() noexcept {
     constexpr int max_events = 256;
     struct epoll_event events[max_events];

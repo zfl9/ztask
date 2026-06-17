@@ -1,7 +1,6 @@
 #include "z_net.hpp"
 #include <assert.h>
 #include <errno.h>
-#include <signal.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/socket.h>
@@ -36,14 +35,6 @@ z_net::Addr::Text z_net::Addr::to_text() const noexcept {
         res.port = ntohs(sin6.sin6_port);
     }
     return res;
-}
-
-void z_net::ignore_sigpipe() noexcept {
-    struct sigaction sa{};
-    sa.sa_handler = SIG_IGN;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0;
-    sigaction(SIGPIPE, &sa, nullptr);
 }
 
 int z_net::ip_family(const char *ip) noexcept {

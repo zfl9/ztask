@@ -1,4 +1,6 @@
 #pragma once
+#include <stddef.h>
+#include <stdint.h>
 #include <assert.h>
 #include <errno.h>
 #include <new>
@@ -52,9 +54,12 @@ public:
     struct z_read {
         z_leaf_fields();
         z_deinit(z_read) {}
-        z_function(int, z_Channel *channel, T *item, int timeout = 0) {
+
+        struct Opt { int timeout; };
+        z_function(int, z_Channel *channel, T *item, Opt opt = {}) {
             z_begin();
-            z_timer_arm(timeout);
+            z_timer_arm(opt.timeout);
+
             int res;
             for (;;) {
                 res = channel->read(item);
@@ -76,6 +81,7 @@ public:
                     }
                 }
             }
+
             out:
             z_timer_disarm();
             z_return(res);
@@ -85,9 +91,12 @@ public:
     struct z_write {
         z_leaf_fields();
         z_deinit(z_write) {}
-        z_function(int, z_Channel *channel, T item, int timeout = 0) {
+
+        struct Opt { int timeout; };
+        z_function(int, z_Channel *channel, T item, Opt opt = {}) {
             z_begin();
-            z_timer_arm(timeout);
+            z_timer_arm(opt.timeout);
+
             int res;
             for (;;) {
                 res = channel->write(item);
@@ -109,6 +118,7 @@ public:
                     }
                 }
             }
+
             out:
             z_timer_disarm();
             z_return(res);
