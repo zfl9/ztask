@@ -35,7 +35,7 @@ struct z_env {
 };
 
 // place it at the beginning of `main()` and `thread_main()`
-#define z_env_setup() \
+#define z_env_init() \
     [[maybe_unused]] z_EnvInit __z_env_init{}
 
 struct z_EnvInit {
