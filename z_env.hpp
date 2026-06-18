@@ -16,7 +16,7 @@ struct z_env {
     z_env() = delete;
     ~z_env() = delete;
 
-    struct Init {
+    struct [[nodiscard]] Init {
         Init() noexcept;
         ~Init() noexcept;
     };
