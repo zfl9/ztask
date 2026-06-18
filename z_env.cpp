@@ -111,13 +111,13 @@ namespace {
     #define z_env_local (reinterpret_cast<z_EnvLocal *>(z_env_local_storage))
 }
 
-// ================== z_EnvInit (guard) ==================
+// ================== z_env::Init (guard) ==================
 
-z_EnvInit::z_EnvInit() noexcept {
+z_env::Init::Init() noexcept {
     new (z_env_local_storage) z_EnvLocal{};
 }
 
-z_EnvInit::~z_EnvInit() noexcept {
+z_env::Init::~Init() noexcept {
     z_env_local->~z_EnvLocal();
 }
 

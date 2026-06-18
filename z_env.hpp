@@ -7,10 +7,19 @@ struct z_TimerMgr;
 struct z_Fd;
 struct z_Epoll;
 
-// thread-local, initialized via `z_EnvInit`
+// place it at the beginning of `main()` and `thread_main()`
+#define z_env_init() \
+    [[maybe_unused]] z_env::Init __z_env_init{}
+
+// thread-local, initialized by `z_env_init()`
 struct z_env {
     z_env() = delete;
     ~z_env() = delete;
+
+    struct Init {
+        Init() noexcept;
+        ~Init() noexcept;
+    };
 
     // clock_monotonic in ms
     static uint64_t tick_time() noexcept;
@@ -32,13 +41,4 @@ struct z_env {
     static void on_fd_close(z_Fd *fd) noexcept;
 
     static void run() noexcept;
-};
-
-// place it at the beginning of `main()` and `thread_main()`
-#define z_env_init() \
-    [[maybe_unused]] z_EnvInit __z_env_init{}
-
-struct z_EnvInit {
-    z_EnvInit() noexcept;
-    ~z_EnvInit() noexcept;
 };
