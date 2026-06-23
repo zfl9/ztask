@@ -11,7 +11,7 @@
 struct z_Fd {
     friend struct z_Epoll;
 
-private:
+protected:
     z_WaiterList read_wq{};
     z_WaiterList write_wq{};
     z_Node ep_node{}; // link to z_Epoll::dirty_fds

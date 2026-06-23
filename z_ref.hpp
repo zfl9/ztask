@@ -34,7 +34,6 @@ public:
     T &operator*() const noexcept { return *ptr; }
     explicit operator bool() const noexcept { return ptr != nullptr; }
 
-    [[nodiscard]] z_Ref share() const noexcept { return z_Ref{ ptr->add_ref() }; } // ref++
     [[nodiscard]] T *raw() const noexcept { return ptr; } // raw pointer
 };
 

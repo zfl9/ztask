@@ -9,6 +9,7 @@ CompileFlags:
     - -Wall
     - -Wextra
     - -Wno-unused-parameter
+    - -Iwolfssl/include
 
 ---
 
@@ -23,6 +24,7 @@ CompileFlags:
     - -Wall
     - -Wextra
     - -Wno-unused-parameter
+    - -Iwolfssl/include
 
 ---
 
