@@ -54,6 +54,7 @@ build() (
     make && make install
 )
 
+[ -d "$install_dir" ] && exit
 install_deps
 download
 extract
