@@ -42,16 +42,19 @@ build() (
     [ -d "$install_dir" ] && return
     cd "$src_dir"
     ./autogen.sh
-    ./configure \
-        --prefix="$install_dir" \
-        --disable-openssl-compatible-defaults \
-        --disable-opensslextra \
-        --disable-oldnames \
-        --enable-alpn \
-        --enable-session-ticket \
-        --enable-aesni \
-        --enable-singlethreaded
-    make && make install
+    local config_args=(
+        --prefix="$install_dir"
+        --disable-openssl-compatible-defaults
+        --disable-opensslextra
+        --disable-oldnames
+        --enable-alpn
+        --enable-session-ticket
+        --enable-aesni
+        # --enable-singlethreaded
+    )
+    ./configure "${config_args[@]}"
+    make
+    make install
 )
 
 [ -d "$install_dir" ] && exit
