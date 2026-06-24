@@ -15,7 +15,7 @@ install_deps() {
     if command -v apt &>/dev/null; then
         sudo apt install -y --no-upgrade gcc g++ make autoconf automake libtool wget tar
     elif command -v pacman &>/dev/null; then
-        sudo pacman -Sy --noconfirm --needed gcc make autoconf automake libtool wget tar
+        sudo pacman -S --noconfirm --needed gcc make autoconf automake libtool wget tar
     elif command -v dnf &>/dev/null; then
         sudo dnf install -y gcc gcc-c++ make autoconf automake libtool wget tar
     elif command -v yum &>/dev/null; then
