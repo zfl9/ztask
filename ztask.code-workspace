@@ -4,7 +4,7 @@
 			"path": "."
 		},
 		{
-			"path": "wolfssl-5.9.1"
+			"path": "wolfssl-src"
 		}
 	],
 	"settings": {}
