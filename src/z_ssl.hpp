@@ -2,6 +2,7 @@
 #include <memory>
 #include <wolfssl/options.h>
 #include <wolfssl/ssl.h>
+#include "z_fd.hpp"
 
 // place it at the beginning of `main()`
 #define z_ssl_init() \
@@ -24,21 +25,26 @@ struct z_ssl {
 
     struct CTX_Deleter {
         void operator()(WOLFSSL_CTX *ctx) const noexcept {
-            wolfSSL_CTX_free(ctx);
+            if (ctx) wolfSSL_CTX_free(ctx);
         }
     };
+    using CTX_Ptr = std::unique_ptr<WOLFSSL_CTX, CTX_Deleter>;
 
-    struct SSL_Deleter {
-        void operator()(WOLFSSL *ssl) const noexcept {
-            wolfSSL_free(ssl);
-        }
-    };
+    static CTX_Ptr CTX_new(WOLFSSL_METHOD *method) noexcept;
+};
 
-    using UniqueCTX = std::unique_ptr<WOLFSSL_CTX, CTX_Deleter>;
-    using UniqueSSL = std::unique_ptr<WOLFSSL, SSL_Deleter>;
+struct z_SSL : protected z_Fd {
+private:
+    WOLFSSL *ssl = nullptr;
 
-    static UniqueCTX CTX_new(WOLFSSL_METHOD *method) noexcept;
-    static UniqueSSL SSL_new(WOLFSSL_CTX *ctx) noexcept;
+    z_SSL(int fd, WOLFSSL_CTX *ssl_ctx) noexcept
+        : z_Fd{fd}, ssl{wolfSSL_new(ssl_ctx)} {}
+
+    ~z_SSL() noexcept { /* close(); */ }
+
+public:
+    z_ref_counted(z_SSL);
+    z_ref_creator(z_SSL);
 
     // todo
 };

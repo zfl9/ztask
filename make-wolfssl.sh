@@ -8,7 +8,7 @@ cd "$(dirname "$0")"
 
 version="5.9.1"
 tar_file="wolfssl-$version.tar.gz"
-src_dir="wolfssl-$version"
+src_dir="wolfssl-src"
 install_dir="$(pwd)/wolfssl"
 
 install_deps() {

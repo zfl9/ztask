@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "wolfssl-5.9.1"
+		}
+	],
+	"settings": {}
+}
