@@ -6,5 +6,5 @@
 .zig-cache/
 zig-out/
 /wolfssl/
-/wolfssl-*/
+/wolfssl-src/
 /wolfssl-*.tar.gz
