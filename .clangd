@@ -21,7 +21,7 @@ If:
 CompileFlags:
   Compiler: clang
   Add:
-    - -std=c23
+    - -std=gnu23
     - -Wall
     - -Wextra
     - -Iwolfssl/include
@@ -36,7 +36,7 @@ If:
 CompileFlags:
   Compiler: clang++
   Add:
-    - -std=c++23
+    - -std=gnu++23
     - -Wall
     - -Wextra
     - -Iwolfssl/include

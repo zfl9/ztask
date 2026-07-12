@@ -29,13 +29,10 @@ pub fn build(b: *std.Build) void {
             "src/z_timer.cpp",
         },
         .flags = &.{
-            "-std=c++23",
+            "-std=gnu++23",
             "-Wall",
             "-Wextra",
             "-Werror",
-            // "-Wno-unused-parameter",
-            // "-Wno-unused-variable",
-            // "-Wno-unused-function",
         },
     });
     ztask.installHeadersDirectory(b.path("src"), "", .{ .include_extensions = &.{ "hpp", "h" } });
@@ -44,7 +41,7 @@ pub fn build(b: *std.Build) void {
     // TODO: change to lazy dependency
     const wolfssl = b.dependency("wolfssl", .{
         .target = target,
-        // .optimize = optimize,
+        .optimize = optimize,
         .lto = .none,
         .single_threaded = false,
     });

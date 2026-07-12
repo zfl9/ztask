@@ -7,6 +7,7 @@
 #include <sys/socket.h>
 #include <sys/epoll.h>
 #include "z_env.hpp"
+#include "z_util.hpp"
 
 static_assert(EAGAIN == EWOULDBLOCK);
 
@@ -212,6 +213,9 @@ z_function_def(z_Fd::z_recv, ssize_t, z_Fd *fd, void *buf, size_t len, Opt opt) 
         .iov_base = buf,
         .iov_len = len,
     };
+
+    // the musl libc has some `__pad` fields
+    Z_NO_WARN_START("-Wmissing-field-initializers");
     msghdr msg{
         .msg_name = opt.addr ? &opt.addr->sa : nullptr,
         .msg_namelen = (socklen_t)(opt.addr ? sizeof(*opt.addr) : 0),
@@ -221,6 +225,8 @@ z_function_def(z_Fd::z_recv, ssize_t, z_Fd *fd, void *buf, size_t len, Opt opt) 
         .msg_controllen = 0,
         .msg_flags = 0,
     };
+    Z_NO_WARN_END();
+
     return z_function_call(fd, &msg, opt);
 }
 
@@ -279,6 +285,9 @@ z_function_def(z_Fd::z_send, ssize_t, z_Fd *fd, const void *buf, size_t len, Opt
         .iov_base = (void *)buf,
         .iov_len = len,
     };
+
+    // the musl libc has some `__pad` fields
+    Z_NO_WARN_START("-Wmissing-field-initializers");
     msghdr msg{
         .msg_name = (void *)(opt.addr ? &opt.addr->sa : nullptr),
         .msg_namelen = opt.addr ? opt.addr->len() : 0,
@@ -288,6 +297,8 @@ z_function_def(z_Fd::z_send, ssize_t, z_Fd *fd, const void *buf, size_t len, Opt
         .msg_controllen = 0,
         .msg_flags = 0,
     };
+    Z_NO_WARN_END();
+
     return z_function_call(fd, &msg, opt);
 }
 

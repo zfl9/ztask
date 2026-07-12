@@ -9,6 +9,15 @@
 #define Z_CONCAT_(a, b) a##b
 #define Z_CONCAT(a, b) Z_CONCAT_(a, b)
 
+#define Z_PRAGMA(x) _Pragma(#x)
+
+#define Z_NO_WARN_START(warn_option) \
+    Z_PRAGMA(GCC diagnostic push) \
+    Z_PRAGMA(GCC diagnostic ignored warn_option)
+
+#define Z_NO_WARN_END() \
+    Z_PRAGMA(GCC diagnostic pop)
+
 template<typename T>
 concept z_pure_c_type =
     std::is_trivially_default_constructible_v<T> &&

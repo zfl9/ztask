@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
+#include "z_util.hpp"
 
 z_net::Addr z_net::Addr::from(int family, const char *ip, uint16_t port) noexcept {
     z_net::Addr addr{}; // zero init
@@ -212,15 +213,18 @@ ssize_t z_net::recvmsg(int fd, msghdr *raw_msg, int flags, size_t skip_bytes) no
             return -1;
         }
 
+        // the musl libc has some `__pad` fields
+        Z_NO_WARN_START("-Wmissing-field-initializers");
         msghdr tmp_msg{
             .msg_name = raw_msg->msg_name,
             .msg_namelen = raw_msg->msg_namelen,
             .msg_iov = (iovec *)iov,
-            .msg_iovlen = (size_t)iovcnt,
+            .msg_iovlen = (decltype(msghdr::msg_iovlen))iovcnt,
             .msg_control = raw_msg->msg_control,
             .msg_controllen = raw_msg->msg_controllen,
             .msg_flags = raw_msg->msg_flags,
         };
+        Z_NO_WARN_END();
 
         ssize_t res = ::recvmsg(fd, &tmp_msg, flags);
         if (res >= 0) {
@@ -246,15 +250,19 @@ ssize_t z_net::sendmsg(int fd, const msghdr *raw_msg, int flags, size_t skip_byt
             return -1;
         }
 
+        // the musl libc has some `__pad` fields
+        Z_NO_WARN_START("-Wmissing-field-initializers");
         msghdr tmp_msg{
             .msg_name = raw_msg->msg_name,
             .msg_namelen = raw_msg->msg_namelen,
             .msg_iov = (iovec *)iov,
-            .msg_iovlen = (size_t)iovcnt,
+            .msg_iovlen = (decltype(msghdr::msg_iovlen))iovcnt,
             .msg_control = raw_msg->msg_control,
             .msg_controllen = raw_msg->msg_controllen,
             .msg_flags = raw_msg->msg_flags,
         };
+        Z_NO_WARN_END();
+
         return ::sendmsg(fd, &tmp_msg, flags);
     }
 }

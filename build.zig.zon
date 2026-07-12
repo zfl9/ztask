@@ -5,8 +5,8 @@
     .minimum_zig_version = "0.15.2",
     .dependencies = .{
         .wolfssl = .{
-            .url = "https://github.com/zfl9/wolfssl-zig/archive/refs/tags/v5.9.2.tar.gz",
-            .hash = "wolfssl-5.9.2--7mO8sIPAACGrEck7wHgoQGimhyOdXifOXpZaclcvC07",
+            .url = "https://github.com/zfl9/wolfssl-zig/archive/refs/tags/v5.9.2-rev1.tar.gz",
+            .hash = "wolfssl-5.9.2--7mO8mUTAAC_Jh1R5C2d__vpu-kIqzwujSCibvixJfYn",
         },
     },
     .paths = .{

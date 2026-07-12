@@ -15,8 +15,6 @@
 #define z_tls_model "local-exec"
 #endif
 
-#define z_attr_tls_model __attribute__((tls_model(z_tls_model)))
-
 // internal helper
 namespace {
     uint64_t sys_tick_time() noexcept {
@@ -106,7 +104,8 @@ namespace {
         }
     };
 
-    alignas(z_EnvLocal) __thread char z_env_local_storage[sizeof(z_EnvLocal)] z_attr_tls_model;
+    [[gnu::tls_model(z_tls_model)]] alignas(z_EnvLocal)
+    __thread char z_env_local_storage[sizeof(z_EnvLocal)];
 
     #define z_env_local (reinterpret_cast<z_EnvLocal *>(z_env_local_storage))
 }
